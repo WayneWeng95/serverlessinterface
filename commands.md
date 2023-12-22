@@ -1,69 +1,4 @@
-TAP_DEV="tap0"
-TAP_IP="172.16.0.1"
-MASK_SHORT="/30"
 
-# Setup network interface
-sudo ip link del "$TAP_DEV" 2> /dev/null || true
-sudo ip tuntap add dev "$TAP_DEV" mode tap
-sudo ip addr add "${TAP_IP}${MASK_SHORT}" dev "$TAP_DEV"
-sudo ip link set dev "$TAP_DEV" up
-
-# Enable ip forwarding
-sudo sh -c "echo 1 > /proc/sys/net/ipv4/ip_forward"
-
-# Set up microVM internet access
-sudo iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE || true
-sudo iptables -D FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT \
-    || true
-sudo iptables -D FORWARD -i tap0 -o eth0 -j ACCEPT || true
-sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-sudo iptables -I FORWARD 1 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-sudo iptables -I FORWARD 1 -i tap0 -o eth0 -j ACCEPT
-
-API_SOCKET="/tmp/firecracker.socket"
-LOGFILE="./firecracker.log"
-
-# Create log file
-touch $LOGFILE
-
-# Set log file
-curl -X PUT --unix-socket "${API_SOCKET}" \
-    --data "{
-        \"log_path\": \"${LOGFILE}\",
-        \"level\": \"Debug\",
-        \"show_level\": true,
-        \"show_log_origin\": true
-    }" \
-    "http://localhost/logger"
-
-KERNEL="./vmlinux-5.10.204"
-KERNEL_BOOT_ARGS="console=ttyS0 reboot=k panic=1 pci=off"
-
-ARCH=$(uname -m)
-
-if [ ${ARCH} = "aarch64" ]; then
-    KERNEL_BOOT_ARGS="keep_bootcon ${KERNEL_BOOT_ARGS}"
-fi
-
-# Set boot source
-curl -X PUT --unix-socket "${API_SOCKET}" \
-    --data "{
-        \"kernel_image_path\": \"${KERNEL}\",
-        \"boot_args\": \"${KERNEL_BOOT_ARGS}\"
-    }" \
-    "http://localhost/boot-source"
-
-ROOTFS="./ubuntu-22.04.ext4"
-
-# Set rootfs
-curl -X PUT --unix-socket "${API_SOCKET}" \
-    --data "{
-        \"drive_id\": \"rootfs\",
-        \"path_on_host\": \"${ROOTFS}\",
-        \"is_root_device\": true,
-        \"is_read_only\": false
-    }" \
-    "http://localhost/drives/rootfs"
 
 # The IP address of a guest is derived from its MAC address with
 # `fcnet-setup.sh`, this has been pre-configured in the guest rootfs. It is
@@ -82,13 +17,6 @@ curl -X PUT --unix-socket "${API_SOCKET}" \
 # API requests are handled asynchronously, it is important the configuration is
 # set, before `InstanceStart`.
 sleep 0.015s
-
-# Start microVM
-curl -X PUT --unix-socket "${API_SOCKET}" \
-    --data "{
-        \"action_type\": \"InstanceStart\"
-    }" \
-    "http://localhost/actions"
 
 # API requests are handled asynchronously, it is important the microVM has been
 # started before we attempt to SSH into it.
@@ -158,7 +86,67 @@ sudo curl --unix-socket /tmp/firecracker.socket -i -X PUT 'http://localhost/acti
 sudo ./target/debug/dirty_page_tracker 1
 ```
 
-# Command on the Server
+# Command on the host configurations
+
+## Setup network interface on host
+```
+TAP_DEV="tap0"
+TAP_IP="172.16.0.1"
+MASK_SHORT="/30"
+
+sudo ip link del "$TAP_DEV" 2> /dev/null || true
+sudo ip tuntap add dev "$TAP_DEV" mode tap
+sudo ip addr add "${TAP_IP}${MASK_SHORT}" dev "$TAP_DEV"
+sudo ip link set dev "$TAP_DEV" up
+```
+
+## Enable ip forwarding
+```
+sudo sh -c "echo 1 > /proc/sys/net/ipv4/ip_forward"
+```
+
+
+## Set up microVM internet access
+```
+sudo iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE || true
+sudo iptables -D FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT \
+    || true
+sudo iptables -D FORWARD -i tap0 -o eth0 -j ACCEPT || true
+sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+sudo iptables -I FORWARD 1 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+sudo iptables -I FORWARD 1 -i tap0 -o eth0 -j ACCEPT
+
+API_SOCKET="/tmp/firecracker.socket"
+LOGFILE="./firecracker.log"
+```
+
+
+# Adding the log file
+
+## Create log file
+touch $LOGFILE
+
+## Set log file
+curl -X PUT --unix-socket "${API_SOCKET}" \
+    --data "{
+        \"log_path\": \"${LOGFILE}\",
+        \"level\": \"Debug\",
+        \"show_level\": true,
+        \"show_log_origin\": true
+    }" \
+    "http://localhost/logger"
+
+KERNEL="./vmlinux-5.10.204"
+KERNEL_BOOT_ARGS="console=ttyS0 reboot=k panic=1 pci=off"
+
+ARCH=$(uname -m)
+
+if [ ${ARCH} = "aarch64" ]; then
+    KERNEL_BOOT_ARGS="keep_bootcon ${KERNEL_BOOT_ARGS}"
+fi
+
+
+# Command for the Start the VM
 
 ## Start Firecracker
 
@@ -167,33 +155,24 @@ weikang@ghost:/home/shared/Firecracker$
 ./firecracker/build/cargo_target/x86_64-unknown-linux-musl/debug/firecracker --api-sock /tmp/firecracker.socket
 ```
 
-## Configue vmlinux.bin
+## Set boot source
 
 ```
 curl --unix-socket /tmp/firecracker.socket -i       -X PUT 'http://localhost/boot-source'         -H 'Accept: application/json'                 -H 'Content-Type: application/json'           -d "{
-            \"kernel_image_path\": \"/home/shared/Firecracker/vmlinux.bin\",
+            \"kernel_image_path\": \"/home/shared/images/vmlinux-5.10.198\",
             \"boot_args\": \"console=ttyS0 reboot=k panic=1 pci=off\"
        }"
 ```
 
-## Configure rootfs
+## Set rootfs
 
 ```
 curl --unix-socket /tmp/firecracker.socket -i   -X PUT 'http://localhost/drives/rootfs'   -H 'Accept: application/json'             -H 'Content-Type: application/json'       -d "{
         \"drive_id\": \"rootfs\",
-        \"path_on_host\": \"/home/shared/Firecracker/ubuntu-18.04.ext4\",
+        \"path_on_host\": \"/home/shared/images/ubuntu-22.04.ext4\",
         \"is_root_device\": true,
         \"is_read_only\": false
    }"
-```
-
-## Setup Vsock
-
-```
-curl --unix-socket /tmp/firecracker.socket -i   -X PUT 'http://localhost/vsock'   -H 'Accept: application/json'   -H 'Content-Type: application/json'   -d '{
-      "guest_cid": 3,
-      "uds_path": "./v.sock"
-  }'
 ```
 
 ## Start the server
@@ -213,3 +192,6 @@ curl --unix-socket /tmp/firecracker.socket -i -X PUT 'http://localhost/actions' 
    "action_type": "SendCtrlAltDel"
 }'
 ```
+
+
+# What left, network interface

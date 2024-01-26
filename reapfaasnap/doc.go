@@ -1,1 +1,1 @@
-package reap-faasnap
+package reapfaasnap

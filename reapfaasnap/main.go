@@ -1,6 +1,8 @@
 package main
 
-import ("math/rand")
+import (
+	"math/rand"
+)
 
 func main() {
 	for i := 0; i < 5; i++ {

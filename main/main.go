@@ -2,6 +2,8 @@ package main
 
 import (
 	"math/rand"
+	"reapfaasnap/reap"
+	"serverlessinterface/reap"
 )
 
 func main() {
@@ -9,6 +11,6 @@ func main() {
 		println(rand.Intn(10))
 	}
 
-	Setup()
+	reap.Setup()
 
 }

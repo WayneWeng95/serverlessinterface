@@ -3,7 +3,7 @@ package main
 import (
 	"math/rand"
 
-	"../serverlessinterface/reap"
+	"github.com/WayneWeng95/serverlessinterface/reap"
 )
 
 func main() {

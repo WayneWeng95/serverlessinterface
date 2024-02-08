@@ -60,35 +60,34 @@ fn snapshot_cutting() -> io::Result<()> {
     Ok(())
 }
 
-use std::fs::create_dir_all;
+use std::fs::{self};
 use std::io::{Read, Write};
 
 fn snapshot_cutting2() -> std::io::Result<()> {
-    // Open the large file for reading
-    let mut file = File::open("test.txt")?;
+    let mut large_file = File::open("test.txt")?;
 
     // Create a directory to store the small files
-    create_dir_all("small_files")?;
+    fs::create_dir_all("small_files")?;
 
-    // Define the size of each slice (in bytes)
-    let slice_size = 2*1024*1024; // 1 KB for example
+    // Define the size of each chunk (in bytes)
+    let chunk_size = 2 * 1024 * 1024; // 6 MiB
 
-    // Buffer to store the slice
-    let mut buffer = vec![0; slice_size];
+    // Buffer to store each chunk
+    let mut buffer = vec![0; chunk_size];
 
     // Counter for naming small files
     let mut file_counter = 1;
 
     loop {
-        // Read a slice from the large file
-        let bytes_read = file.read(&mut buffer)?;
+        // Read a chunk from the large file
+        let bytes_read = large_file.read(&mut buffer)?;
 
         if bytes_read == 0 {
             // Reached end of file
             break;
         }
 
-        // Write the slice to a small file
+        // Write the chunk to a small file
         let mut small_file = File::create(format!("small_files/part_{}.txt", file_counter))?;
         small_file.write_all(&buffer[..bytes_read])?;
 

@@ -4,6 +4,8 @@ fn main() {
 
     snapshot_cutting2().unwrap();
 
+    blocks_restoring().unwrap();
+
     crypto_demo().unwrap();
 }
 
@@ -96,6 +98,40 @@ fn snapshot_cutting2() -> std::io::Result<()> {
     }
 
     Ok(())
+}
+
+fn blocks_restoring() -> std::io::Result<()> {
+    // Create the original file for writing
+    let mut original_file = File::create("mem_file_orig")?;
+
+    // Iterate over the small files and concatenate their contents
+    let mut file_counter = 1;
+    loop {
+        let small_file_path = format!("small_files/part_{}.txt", file_counter);
+        if !small_file_exists(&small_file_path) {
+            // No more small files, exit loop
+            break;
+        }
+
+        // Open the small file for reading
+        let mut small_file = File::open(small_file_path)?;
+
+        // Read the contents of the small file into a buffer
+        let mut buffer = Vec::new();
+        small_file.read_to_end(&mut buffer)?;
+
+        // Write the contents of the small file to the original file
+        original_file.write_all(&buffer)?;
+
+        // Increment file counter
+        file_counter += 1;
+    }
+
+    Ok(())
+}
+
+fn small_file_exists(path: &str) -> bool {
+    fs::metadata(path).is_ok()
 }
 
 use md5;

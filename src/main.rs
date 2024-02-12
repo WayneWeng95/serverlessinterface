@@ -69,30 +69,32 @@ fn snapshot_cutting2() -> std::io::Result<()> {
     // Create a directory to store the small files
     fs::create_dir_all("small_files")?;
 
-    // Define the size of each chunk (in bytes)
-    let chunk_size = 2 * 1024 * 1024; // 6 MiB
+    // Define the size of the buffer (in bytes)
+    let buffer_size = 6 * 1024 * 1024; // 6 MiB
 
-    // Buffer to store each chunk
-    let mut buffer = vec![0; chunk_size];
+    // Buffer to store the entire file
+    let mut buffer = vec![0; buffer_size];
 
-    // Counter for naming small files
-    let mut file_counter = 1;
+    // Read the entire file into the buffer
+    let bytes_read = large_file.read(&mut buffer)?;
 
-    loop {
-        // Read a chunk from the large file
-        let bytes_read = large_file.read(&mut buffer)?;
+    // Calculate the size of each chunk (in bytes)
+    let chunk_size = buffer_size / 3;
 
-        if bytes_read == 0 {
-            // Reached end of file
-            break;
-        }
+    // Iterate over the chunks and write them to separate files
+    for i in 0..3 {
+        // Define the start and end indices for the current chunk
+        let start_index = i * chunk_size;
+        let end_index = (i + 1) * chunk_size;
 
-        // Write the chunk to a small file
-        let mut small_file = File::create(format!("small_files/part_{}.txt", file_counter))?;
-        small_file.write_all(&buffer[..bytes_read])?;
+        // Extract the chunk from the buffer
+        let chunk = &buffer[start_index..end_index];
 
-        // Increment file counter
-        file_counter += 1;
+        // Create a file for the current chunk
+        let mut small_file = File::create(format!("small_files/part_{}.txt", i + 1))?;
+
+        // Write the chunk to the file
+        small_file.write_all(chunk)?;
     }
 
     Ok(())

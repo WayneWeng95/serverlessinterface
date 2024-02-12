@@ -195,3 +195,60 @@ curl --unix-socket /tmp/firecracker.socket -i -X PUT 'http://localhost/actions' 
 
 
 # What left, network interface
+
+
+# Do the snapshot
+
+## Pausing the microVM
+
+```
+curl --unix-socket /tmp/firecracker.socket -i \
+    -X PATCH 'http://localhost/vm' \
+    -H 'Accept: application/json' \
+    -H 'Content-Type: application/json' \
+    -d '{
+            "state": "Paused"
+    }'
+```
+
+## Resuming the microVM
+
+```
+curl --unix-socket /tmp/firecracker.socket -i \
+    -X PATCH 'http://localhost/vm' \
+    -H 'Accept: application/json' \
+    -H 'Content-Type: application/json' \
+    -d '{
+            "state": "Resumed"
+    }'
+
+```
+
+
+## Creating full snapshot
+
+```
+curl --unix-socket /tmp/firecracker.socket -i \
+    -X PUT 'http://localhost/snapshot/create' \
+    -H  'Accept: application/json' \
+    -H  'Content-Type: application/json' \
+    -d '{
+            "snapshot_type": "Full",
+            "snapshot_path": "./snapshot_file",
+            "mem_file_path": "./mem_file",
+    }'
+```
+
+## Creating diff snapshot
+
+```
+curl --unix-socket /tmp/firecracker.socket -i \
+    -X PUT 'http://localhost/snapshot/create' \
+    -H  'Accept: application/json' \
+    -H  'Content-Type: application/json' \
+    -d '{
+            "snapshot_type": "Diff",
+            "snapshot_path": "./snapshot_file",
+            "mem_file_path": "./mem_file",
+    }'
+```

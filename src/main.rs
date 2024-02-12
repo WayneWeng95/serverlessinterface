@@ -6,6 +6,8 @@ fn main() {
 
     blocks_restoring().unwrap();
 
+    fuse_main();
+
     crypto_demo().unwrap();
 }
 
@@ -180,4 +182,48 @@ fn crypto_demo() -> Result<(), chacha20poly1305::Error> {
     }
     // assert_eq!(&plaintext, b"plaintext message");
     Ok(())
+}
+
+use fuser::{FileType, Filesystem, MountOption, ReplyAttr, Request};
+use std::ffi::OsStr;
+use std::time::{Duration, SystemTime};
+
+struct MyFS;
+
+impl Filesystem for MyFS {
+    fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
+        let attr = fuser::FileAttr {
+            ino: 1,
+            size: 10240000,
+            blksize: 1024,
+            padding: 0,
+            blocks: 1,
+            atime: SystemTime::now().into(),
+            mtime: SystemTime::now().into(),
+            ctime: SystemTime::now().into(),
+            crtime: SystemTime::now().into(),
+            kind: FileType::Directory,
+            perm: 0o755,
+            nlink: 2,
+            uid: 501,
+            gid: 20,
+            rdev: 0,
+            flags: 0,
+        };
+        reply.attr(&Duration::new(0, 0), &attr);
+    }
+
+    // Implement other filesystem methods as needed
+}
+
+fn fuse_main() {
+    let mountpoint = std::env::args_os().nth(1).unwrap();
+    let filesystem = MyFS;
+    let mut options = vec![MountOption::RO, MountOption::FSName("hello".to_string())];
+
+    options.push(MountOption::AutoUnmount);
+
+    options.push(MountOption::AllowRoot);
+
+    fuser::mount2(filesystem, mountpoint, &options).unwrap();
 }

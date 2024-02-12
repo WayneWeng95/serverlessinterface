@@ -64,7 +64,7 @@ use std::fs::{self};
 use std::io::{Read, Write};
 
 fn snapshot_cutting2() -> std::io::Result<()> {
-    let mut large_file = File::open("test.txt")?;
+    let mut large_file = File::open("mem_file")?;
 
     // Create a directory to store the small files
     fs::create_dir_all("small_files")?;

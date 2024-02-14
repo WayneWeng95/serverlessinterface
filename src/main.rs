@@ -245,9 +245,9 @@ fn fuse_main() {
     let filesystem = MyFS;
     let mut options = vec![MountOption::RW, MountOption::FSName("hello".to_string())];
 
-    // options.push(MountOption::AutoUnmount);
+    options.push(MountOption::AllowOther);
 
-    // options.push(MountOption::AllowRoot);
+    options.push(MountOption::AutoUnmount);
 
     fuser::mount2(filesystem, mountpoint, &options).unwrap();
 }

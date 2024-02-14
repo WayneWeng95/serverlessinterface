@@ -23,7 +23,7 @@ fn save_into_hashmap() {
 
 use uuid::Uuid;
 
-fn generate_uuid() -> Uuid {
+pub fn generate_uuid() -> Uuid {
     let uuid = uuid::Uuid::new_v4();
     // println!("{}", uuid);
     uuid

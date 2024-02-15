@@ -10,7 +10,7 @@ use chacha20poly1305::{
     ChaCha20Poly1305, Nonce,
 };
 
-fn crypto_demo() -> Result<(), chacha20poly1305::Error> {
+pub fn crypto_demo() -> Result<(), chacha20poly1305::Error> {
     let key = ChaCha20Poly1305::generate_key(&mut OsRng);
     let cipher = ChaCha20Poly1305::new(&key);
     let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng); // 96-bits; unique per message

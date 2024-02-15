@@ -5,13 +5,13 @@ mod vminfo;
 
 fn main() {
     println!("Hello, world!");
-    println!("{}", generate_uuid());
+    println!("{}", vminfo::generate_uuid());
 
     // chunks::chunks_cutting().unwrap();
 
-    // blocks_restoring().unwrap();
+    // chunks::chunks_restoring().unwrap();
 
     // fuse::fuse_main();
 
-    // encrypt::crypto_demo().unwrap();
+    encrypt::crypto_demo().unwrap();
 }

@@ -4,7 +4,7 @@ use std::io;
 use std::io::prelude::*;
 use std::io::{Read, Write};
 
-fn chunks_cutting() -> std::io::Result<()> {
+pub fn chunks_cutting() -> std::io::Result<()> {
     let mut large_file = File::open("mem_file")?;
 
     // Create a directory to store the small files
@@ -43,7 +43,7 @@ fn small_file_exists(path: &str) -> bool {
     fs::metadata(path).is_ok()
 }
 
-fn chunks_restoring() -> std::io::Result<()> {
+pub fn chunks_restoring() -> std::io::Result<()> {
     // Create the original file for writing
     let mut original_file = File::create("mem_file_orig")?;
 

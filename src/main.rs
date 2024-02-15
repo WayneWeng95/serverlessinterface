@@ -1,14 +1,14 @@
 mod chunks;
 mod encrypt;
+mod firecrackerapi;
 mod fuse;
 mod vminfo;
-mod firecrackerapi;
 
 fn main() {
     println!("Hello, world!");
     println!("{}", vminfo::generate_uuid());
 
-    firecrackerapi::set_boot_source().unwrap();
+    async_main();   // for the tokio::main
 
     // chunks::chunks_cutting().unwrap();
 
@@ -17,4 +17,11 @@ fn main() {
     // fuse::fuse_main();
 
     // encrypt::crypto_demo().unwrap();
+}
+
+#[tokio::main]
+async fn async_main() {
+    if let Err(err) = firecrackerapi::set_boot_source().await {
+        eprintln!("Error: {}", err);
+    }
 }

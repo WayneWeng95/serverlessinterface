@@ -27,6 +27,86 @@ impl Filesystem for MyFS {
         reply.attr(&Duration::new(0, 0), &attr);
     }
 
+    fn read(
+        &mut self,
+        _req: &Request,
+        inode: u64,
+        fh: u64,
+        offset: i64,
+        size: u32,
+        _flags: i32,
+        _lock_owner: Option<u64>,
+        reply: ReplyData,
+    ) {
+        debug!(
+            "read() called on {:?} offset={:?} size={:?}",
+            inode, offset, size
+        );
+        assert!(offset >= 0);
+        if !self.check_file_handle_read(fh) {
+            reply.error(libc::EACCES);
+            return;
+        }
+
+        let path = self.content_path(inode);
+        if let Ok(file) = File::open(path) {
+            let file_size = file.metadata().unwrap().len();
+            // Could underflow if file length is less than local_start
+            let read_size = min(size, file_size.saturating_sub(offset as u64) as u32);
+
+            let mut buffer = vec![0; read_size as usize];
+            file.read_exact_at(&mut buffer, offset as u64).unwrap();
+            reply.data(&buffer);
+        } else {
+            reply.error(libc::ENOENT);
+        }
+    }
+
+    fn write(
+        &mut self,
+        _req: &Request,
+        inode: u64,
+        fh: u64,
+        offset: i64,
+        data: &[u8],
+        _write_flags: u32,
+        #[allow(unused_variables)] flags: i32,
+        _lock_owner: Option<u64>,
+        reply: ReplyWrite,
+    ) {
+        debug!("write() called with {:?} size={:?}", inode, data.len());
+        assert!(offset >= 0);
+        if !self.check_file_handle_write(fh) {
+            reply.error(libc::EACCES);
+            return;
+        }
+
+        let path = self.content_path(inode);
+        if let Ok(mut file) = OpenOptions::new().write(true).open(path) {
+            file.seek(SeekFrom::Start(offset as u64)).unwrap();
+            file.write_all(data).unwrap();
+
+            let mut attrs = self.get_inode(inode).unwrap();
+            attrs.last_metadata_changed = time_now();
+            attrs.last_modified = time_now();
+            if data.len() + offset as usize > attrs.size as usize {
+                attrs.size = (data.len() + offset as usize) as u64;
+            }
+            // #[cfg(feature = "abi-7-31")]
+            // if flags & FUSE_WRITE_KILL_PRIV as i32 != 0 {
+            //     clear_suid_sgid(&mut attrs);
+            // }
+            // XXX: In theory we should only need to do this when WRITE_KILL_PRIV is set for 7.31+
+            // However, xfstests fail in that case
+            clear_suid_sgid(&mut attrs);
+            self.write_inode(&attrs);
+
+            reply.written(data.len() as u32);
+        } else {
+            reply.error(libc::EBADF);
+        }
+    }
+
     // Implement other filesystem methods as needed
 }
 

@@ -4,6 +4,7 @@ struct vm_metadata {
     network: String,
     status: String,
     resources: vm_resource,
+    socket_path: String,
 }
 
 struct vm_resource {

@@ -10,10 +10,12 @@ use chacha20poly1305::{
     ChaCha20Poly1305, Nonce,
 };
 
+//Using of the ChaCha20Poly1305 algorithm maybe a enrasuring code version could be added if a crate is available
 pub fn crypto_demo() -> Result<(), chacha20poly1305::Error> {
     let key = ChaCha20Poly1305::generate_key(&mut OsRng);
     let cipher = ChaCha20Poly1305::new(&key);
     let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng); // 96-bits; unique per message
+    //Is the nonce can be generate by the uuid?
 
     let ciphertext = cipher.encrypt(&nonce, b"plaintext message".as_ref())?;
     println!("{:?}", ciphertext);

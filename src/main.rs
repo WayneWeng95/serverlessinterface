@@ -1,13 +1,11 @@
-mod chunks;
-mod encrypt;
-mod firecrackerapi;
-mod snapshotapi;
+mod api;
 mod fuse;
-mod vminfo;
+mod vm;
+mod security;
 
 fn main() {
     println!("Hello, world!");
-    println!("{}", vminfo::generate_uuid());
+    println!("{}", vm::vminfo::generate_uuid());
 
     async_main();   // for the tokio::main
 
@@ -22,7 +20,7 @@ fn main() {
 
 #[tokio::main]
 async fn async_main() {
-    if let Err(err) = firecrackerapi::set_boot_source().await {
+    if let Err(err) = api::firecrackerapi::set_boot_source().await {
         eprintln!("Error: {}", err);
     }
 

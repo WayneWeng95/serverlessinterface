@@ -23,6 +23,10 @@ async fn async_main() {
     if let Err(err) = api::firecrackerapi::set_boot_source().await {
         eprintln!("Error: {}", err);
     }
+    if let Err(err) = api::firecrackerapi::set_rootfs().await {
+        eprintln!("Error: {}", err);
+    }
+
 
     // send_request("Paused", "").await?; // Send PATCH request to pause VM
     // send_request("Resumed", "").await?; // Send PATCH request to resume VM

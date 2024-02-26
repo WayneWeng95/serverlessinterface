@@ -49,7 +49,7 @@ pub async fn set_boot_source() -> io::Result<()> {
     Ok(())
 }
 
-async fn set_rootfs() -> io::Result<()> {
+pub async fn set_rootfs() -> io::Result<()> {
     // Define the Unix socket path
     let socket_path = "/tmp/firecracker.socket";
 

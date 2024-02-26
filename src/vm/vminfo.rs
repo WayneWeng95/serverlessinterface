@@ -1,18 +1,32 @@
-struct vm_metadata {
+enum vm_status {
+    Initializaing,
+    Running,
+    Paused,
+    Terminated,
+}
+
+struct vm_info {
     pid: u32,
     imageid: u32,
     network: String,
-    status: String,
-    resources: vm_resource,
+    status: vm_status,
+    config: vm_firecracker_config,
+}
+
+struct vm_firecracker_config {
+    kernel_image_path: String,
+    boot_args: String,
+    rootfs_path: String,
+    vcpu_count: u32,
+    mem_size_mib: u32,
     socket_path: String,
 }
 
-struct vm_resource {
+struct vm_state_resource {
     cpu: u32,
     memory: u32,
     storage: u32,
 }
-
 
 use std::collections::HashMap;
 

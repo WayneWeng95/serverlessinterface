@@ -1,4 +1,4 @@
-enum VmStatus {
+pub enum VmStatus {
     Initializaing,
     Ready,
     Running,
@@ -6,11 +6,30 @@ enum VmStatus {
     Terminated,
 }
 
-struct VmInfo {
-    imageid: u32,
+pub struct VmInfo {
+    pub uuid: Uuid,
+    image: String,
     network: String,
     status: VmStatus,
     config: VmFirecrackerConfig,
+}
+
+impl VmInfo {
+    pub fn new(
+        uuid: Uuid,
+        image: String,
+        network: String,
+        status: VmStatus,
+        config: VmFirecrackerConfig,
+    ) -> Self {
+        VmInfo {
+            uuid,
+            image,
+            network,
+            status,
+            config,
+        }
+    }
 }
 
 pub struct VmFirecrackerConfig {
@@ -47,6 +66,11 @@ struct VmStateResource {
     memory: u32,
     storage: u32,
     pid: u32,
+}
+
+pub fn net_work() -> String {
+    let net = "eth0";
+    net.to_string()
 }
 
 use std::collections::HashMap;

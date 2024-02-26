@@ -1,6 +1,6 @@
 use super::vminfo::*;
 
-fn set_up_vm() {
+pub fn set_up_vm() {
     let uuid = generate_uuid();
 
     let config = VmFirecrackerConfig::new(
@@ -11,4 +11,14 @@ fn set_up_vm() {
         1024,
         "/tmp/firecracker.socket".to_string(),
     );
+
+    let vm = VmInfo::new(
+        uuid,
+        "/home/shared/images/ubuntu-22.04.ext4".to_string(),
+        net_work(),
+        VmStatus::Initializaing,
+        config,
+    );
+
+    println!("VM UUID: {}", vm.uuid);
 }

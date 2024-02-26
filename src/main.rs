@@ -18,6 +18,10 @@ fn main() {
     // encrypt::crypto_demo().unwrap();
 }
 
+fn test_main(){
+    
+}
+
 #[tokio::main]
 async fn async_main() {
     if let Err(err) = api::firecrackerapi::set_boot_source().await {

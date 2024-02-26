@@ -1,19 +1,19 @@
-enum vm_status {
+enum VmStatus {
     Initializaing,
+    Ready,
     Running,
     Paused,
     Terminated,
 }
 
-struct vm_info {
-    pid: u32,
+struct VmInfo {
     imageid: u32,
     network: String,
-    status: vm_status,
-    config: vm_firecracker_config,
+    status: VmStatus,
+    config: VmFirecrackerConfig,
 }
 
-struct vm_firecracker_config {
+pub struct VmFirecrackerConfig {
     kernel_image_path: String,
     boot_args: String,
     rootfs_path: String,
@@ -22,10 +22,31 @@ struct vm_firecracker_config {
     socket_path: String,
 }
 
-struct vm_state_resource {
+impl VmFirecrackerConfig {
+    pub fn new(
+        kernel_image_path: String,
+        boot_args: String,
+        rootfs_path: String,
+        vcpu_count: u32,
+        mem_size_mib: u32,
+        socket_path: String,
+    ) -> Self {
+        VmFirecrackerConfig {
+            kernel_image_path,
+            boot_args,
+            rootfs_path,
+            vcpu_count,
+            mem_size_mib,
+            socket_path,
+        }
+    }
+}
+
+struct VmStateResource {
     cpu: u32,
     memory: u32,
     storage: u32,
+    pid: u32,
 }
 
 use std::collections::HashMap;

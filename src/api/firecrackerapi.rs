@@ -7,6 +7,13 @@ use tokio::net::UnixStream;
 //     "boot_args": "{}"
 // }}"#, kernel_image_path, boot_args);
 
+pub async fn initialize_vm() -> io::Result<()> {
+    set_boot_source().await?;
+    set_rootfs().await?;
+    start_instance().await?;
+    Ok(())
+}
+
 pub async fn set_boot_source() -> io::Result<()> {
     // Define the Unix socket path
     let socket_path = "/tmp/firecracker.socket";
@@ -123,4 +130,3 @@ async fn start_instance() -> io::Result<()> {
 
     Ok(())
 }
-

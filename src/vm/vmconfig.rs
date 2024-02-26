@@ -20,5 +20,10 @@ pub fn set_up_vm() {
         config,
     );
 
-    println!("VM UUID: {}", vm.uuid);
+    println!("VM {:#?}", vm);
+}
+
+pub fn vm_runtime() {
+    
+
 }

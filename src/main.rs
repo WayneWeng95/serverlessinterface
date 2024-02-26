@@ -28,10 +28,7 @@ fn test_main() {
 
 #[tokio::main]
 async fn async_main() {
-    if let Err(err) = api::firecrackerapi::set_boot_source().await {
-        eprintln!("Error: {}", err);
-    }
-    if let Err(err) = api::firecrackerapi::set_rootfs().await {
+    if let Err(err) = api::firecrackerapi::initialize_vm().await {
         eprintln!("Error: {}", err);
     }
 

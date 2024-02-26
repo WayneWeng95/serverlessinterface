@@ -1,3 +1,4 @@
+#[derive(Debug)] // for debug
 pub enum VmStatus {
     Initializaing,
     Ready,
@@ -6,6 +7,7 @@ pub enum VmStatus {
     Terminated,
 }
 
+#[derive(Debug)] // for debug
 pub struct VmInfo {
     pub uuid: Uuid,
     image: String,
@@ -32,6 +34,7 @@ impl VmInfo {
     }
 }
 
+#[derive(Debug)] // for debug
 pub struct VmFirecrackerConfig {
     kernel_image_path: String,
     boot_args: String,
@@ -61,11 +64,31 @@ impl VmFirecrackerConfig {
     }
 }
 
-struct VmStateResource {
+struct VmRuntime {
     cpu: u32,
     memory: u32,
     storage: u32,
     pid: u32,
+    VM: VmInfo,
+}
+
+impl VmRuntime {
+    pub fn new(cpu: u32, memory: u32, storage: u32, pid: u32, VM: VmInfo) -> Self {
+        VmRuntime {
+            cpu,
+            memory,
+            storage,
+            pid,
+            VM,
+        }
+    }
+
+    pub fn update(&mut self, cpu: u32, memory: u32, storage: u32, pid: u32) {       //Check whether update the vm state or not
+        self.cpu = cpu;
+        self.memory = memory;
+        self.storage = storage;
+        self.pid = pid;
+    }
 }
 
 pub fn net_work() -> String {

@@ -3,13 +3,14 @@ mod fuse;
 mod security;
 mod vm;
 
+use crate::vm::vmconfig::set_up_vm;
 fn main() {
     println!("Hello, world!");
     println!("{}", vm::vminfo::generate_uuid());
 
     test_main();
 
-    async_main(); // for the tokio::main
+    async_main(VmSetUp::default_test()); // for the tokio::main
 
     // chunks::chunks_cutting().unwrap();
 
@@ -20,15 +21,18 @@ fn main() {
     // encrypt::crypto_demo().unwrap();
 }
 
-use crate::vm::vmconfig::set_up_vm;
+use crate::vm::vminfo::VmSetUp;
 
 fn test_main() {
-    set_up_vm();
+    // set_up_vm();
+    let vmsetup = vm::vminfo::VmSetUp::default_test();
+
+    println!("VM setup: {:#?}", vmsetup);
 }
 
 #[tokio::main]
-async fn async_main() {
-    if let Err(err) = api::firecrackerapi::initialize_vm().await {
+async fn async_main(vmsetup: VmSetUp) {
+    if let Err(err) = api::firecrackerapi::initialize_vm(vmsetup).await {
         eprintln!("Error: {}", err);
     }
 

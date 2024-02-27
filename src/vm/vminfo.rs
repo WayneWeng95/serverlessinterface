@@ -1,4 +1,55 @@
 #[derive(Debug)] // for debug
+pub struct VmSetUp {
+    pub uuid: Uuid,
+    pub socket_path: String,
+    pub kernel_image_path: String,
+    pub boot_args: String,
+    pub rootfs_path: String,
+    pub is_read_only: bool,
+    pub vcpu_count: u32,
+    pub mem_size_mib: u32,
+}
+
+impl VmSetUp {
+    pub fn new(
+        kernel_image_path: String,
+        boot_args: String,
+        rootfs_path: String,
+        is_read_only: bool,
+        vcpu_count: u32,
+        mem_size_mib: u32,
+    ) -> Self {
+        let uuid = generate_uuid();
+        let socket_path = format!("/tmp/firecracker_{}.socket", uuid.to_string());
+        VmSetUp {
+            uuid,
+            socket_path,
+            kernel_image_path,
+            boot_args,
+            rootfs_path,
+            is_read_only,
+            vcpu_count,
+            mem_size_mib,
+        }
+    }
+
+    pub fn default_test() -> Self {
+        let uuid = generate_uuid();
+        let socket_path = format!("/tmp/firecracker_{}.socket", uuid.to_string());
+        Self {
+            uuid: uuid,
+            socket_path: socket_path,
+            kernel_image_path: "/home/shared/images/kernel_image".to_string(),
+            boot_args: "console=ttyS0 reboot=k panic=1 pci=off".to_string(),
+            rootfs_path: "/home/shared/images/ubuntu-22.04.ext4".to_string(),
+            is_read_only: false,
+            vcpu_count: 1,
+            mem_size_mib: 128,
+        }
+    }
+}
+
+#[derive(Debug)] // for debug
 pub enum VmStatus {
     Initializaing,
     Ready,
@@ -13,7 +64,7 @@ pub struct VmInfo {
     image: String,
     network: String,
     status: VmStatus,
-    config: VmFirecrackerConfig,
+    config: VmSetUp,
 }
 
 impl VmInfo {
@@ -22,7 +73,7 @@ impl VmInfo {
         image: String,
         network: String,
         status: VmStatus,
-        config: VmFirecrackerConfig,
+        config: VmSetUp,
     ) -> Self {
         VmInfo {
             uuid,
@@ -30,36 +81,6 @@ impl VmInfo {
             network,
             status,
             config,
-        }
-    }
-}
-
-#[derive(Debug)] // for debug
-pub struct VmFirecrackerConfig {
-    kernel_image_path: String,
-    boot_args: String,
-    rootfs_path: String,
-    vcpu_count: u32,
-    mem_size_mib: u32,
-    socket_path: String,
-}
-
-impl VmFirecrackerConfig {
-    pub fn new(
-        kernel_image_path: String,
-        boot_args: String,
-        rootfs_path: String,
-        vcpu_count: u32,
-        mem_size_mib: u32,
-        socket_path: String,
-    ) -> Self {
-        VmFirecrackerConfig {
-            kernel_image_path,
-            boot_args,
-            rootfs_path,
-            vcpu_count,
-            mem_size_mib,
-            socket_path,
         }
     }
 }
@@ -83,7 +104,8 @@ impl VmRuntime {
         }
     }
 
-    pub fn update(&mut self, cpu: u32, memory: u32, storage: u32, pid: u32) {       //Check whether update the vm state or not
+    pub fn update(&mut self, cpu: u32, memory: u32, storage: u32, pid: u32) {
+        //Check whether update the vm state or not
         self.cpu = cpu;
         self.memory = memory;
         self.storage = storage;

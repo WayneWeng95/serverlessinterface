@@ -113,11 +113,6 @@ impl VmRuntime {
     }
 }
 
-pub fn net_work() -> String {
-    let net = "eth0";
-    net.to_string()
-}
-
 use std::collections::HashMap;
 
 fn save_into_hashmap() {

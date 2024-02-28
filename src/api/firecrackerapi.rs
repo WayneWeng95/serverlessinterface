@@ -1,7 +1,9 @@
+use std::f32::consts::E;
 use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 
+use crate::vm::vmconfig;
 use crate::vm::vminfo::{VmInfo, VmSetUp};
 
 // let body = format!(r#"{{                 //The format version of the call body
@@ -9,7 +11,7 @@ use crate::vm::vminfo::{VmInfo, VmSetUp};
 //     "boot_args": "{}"
 // }}"#, kernel_image_path, boot_args);
 
-pub async fn initialize_vm(vmsetup: VmSetUp) -> io::Result<()> {
+pub async fn initialize_vm(vmsetup: &VmSetUp) -> io::Result<()> {
     // let vminfo = VmInfo::new(vmsetup.uuid, image, network, status, config)
     match set_boot_source(
         &vmsetup.socket_path,
@@ -21,13 +23,32 @@ pub async fn initialize_vm(vmsetup: VmSetUp) -> io::Result<()> {
         Ok(_) => {
             println!("Boot source set successfully");
             // vmsetup.vm_state = VmStatus::Initializaing;
-            set_rootfs(
+            match set_rootfs(
                 &vmsetup.socket_path,
                 &vmsetup.rootfs_path,
                 vmsetup.is_read_only,
             )
-            .await?;
-            instance_control(VmStatus::Running).await?;
+            .await
+            {
+                Ok(_) => {
+                    println!("Rootfs set successfully");
+                    let vmnetwork = vmconfig::vm_network();
+                    match set_network(
+                        &vmsetup.socket_path,
+                        &vmnetwork.iface_id,
+                        &vmnetwork.guest_mac,
+                        &vmnetwork.host_dev_name,
+                    )
+                    .await
+                    {
+                        Ok(_) => {
+                            println!("Network set successfully");
+                        }
+                        Err(e) => eprintln!("Error setting network: {}", e),
+                    }
+                }
+                Err(e) => eprintln!("Error setting rootfs: {}", e),
+            }
         }
         Err(e) => eprintln!("Error setting boot source: {}", e),
     }
@@ -120,15 +141,71 @@ pub async fn set_rootfs(
     Ok(())
 }
 
+async fn set_network(
+    socket_path: &str,
+    iface_id: &str,
+    guest_mac: &str,
+    host_dev_name: &str,
+) -> io::Result<()> {
+    let body = format!(
+        r#"{{                 //The format version of the call body
+        "iface_id": "{}",
+        "guest_mac": "{}",
+        "host_dev_name": "{}"
+    }}"#,
+        iface_id, guest_mac, host_dev_name
+    );
+
+    let mut stream = UnixStream::connect(socket_path).await?;
+
+    let request = format!(
+        "PUT network-interfaces/{} HTTP/1.1\r\n\
+                                Host: localhost\r\n\
+                                Content-Type: application/json\r\n\
+                                Content-Length: {}\r\n\
+                                \r\n\
+                                {}",
+        iface_id,
+        body.len(),
+        body
+    );
+
+    stream.write_all(request.as_bytes()).await?;
+
+    let mut response = String::new();
+    stream.read_to_string(&mut response).await?;
+    println!("{}", response);
+
+    Ok(())
+}
+
 use crate::vm::vminfo::VmStatus;
-async fn instance_control(state: VmStatus) -> io::Result<()> {
+pub async fn instance_control(socket_path: &str, state: VmStatus) -> io::Result<()> {
     // Define the Unix socket path
-    let socket_path = "/tmp/firecracker/firecracker.socket";
 
     // Define the request body
-    let body = r#"{
-        "action_type": "InstanceStart"
-    }"#;
+    let (body, len) = match state {
+        VmStatus::Running => {
+            let body = r#"{"action_type": "InstanceStart"}"#;
+            (body, body.len())
+        }
+        VmStatus::Paused => {
+            let body = r#"{"state": "Paused"}"#;
+            (body, body.len())
+        }
+        VmStatus::Resume => {
+            let body = r#"{"state": "Resumed"}"#;
+            (body, body.len())
+        }
+        VmStatus::Terminated => {
+            let body = r#"{"action_type": "SendCtrlAltDel"}"#;
+            (body, body.len())
+        }
+        _ => {
+            println!("Invalid state");
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "Invalid state"));
+        }
+    };
 
     // Establish a connection to the Unix domain socket
     let mut stream = UnixStream::connect(socket_path).await?;

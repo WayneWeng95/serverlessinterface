@@ -55,6 +55,7 @@ pub enum VmStatus {
     Ready,
     Running,
     Paused,
+    Resume,
     Terminated,
 }
 
@@ -85,22 +86,39 @@ impl VmInfo {
     }
 }
 
+#[derive(Debug)] // for debug
+pub struct VMnetowrk {
+    pub iface_id: String,
+    pub guest_mac: String,
+    pub host_dev_name: String,
+}
+
+impl VMnetowrk {
+    pub fn new(iface_id: String, guest_mac: String, host_dev_name: String) -> Self {
+        VMnetowrk {
+            iface_id,
+            guest_mac,
+            host_dev_name,
+        }
+    }
+}
+
 struct VmRuntime {
     cpu: u32,
     memory: u32,
     storage: u32,
     pid: u32,
-    VM: VmInfo,
+    vm: VmInfo,
 }
 
 impl VmRuntime {
-    pub fn new(cpu: u32, memory: u32, storage: u32, pid: u32, VM: VmInfo) -> Self {
+    pub fn new(cpu: u32, memory: u32, storage: u32, pid: u32, vm: VmInfo) -> Self {
         VmRuntime {
             cpu,
             memory,
             storage,
             pid,
-            VM,
+            vm,
         }
     }
 

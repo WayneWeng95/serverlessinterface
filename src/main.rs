@@ -9,7 +9,11 @@ fn main() {
 
     test_main();
 
-    async_main(); // for the tokio::main
+    let iplibrary = vm::vminfo::IpLibrary::new();
+
+    // vm::vmconfig::network_generate(iplibrary);
+
+    async_main(iplibrary); // for the tokio::main
 
     // chunks::chunks_cutting().unwrap();
 
@@ -27,9 +31,9 @@ fn test_main() {
     println!("VM setup: {:#?}", vmsetup);
 }
 
-#[tokio::main]
-async fn async_main() {
-    if let Err(err) = vm::vmconfig::set_up_vm().await {
+#[tokio::main] //temporarily comment out for testing
+async fn async_main(iplibrary: vm::vminfo::IpLibrary) {
+    if let Err(err) = vm::vmconfig::set_up_vm(iplibrary).await {
         eprintln!("Error: {}", err);
     }
 

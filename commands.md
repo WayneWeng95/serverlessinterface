@@ -175,6 +175,19 @@ curl --unix-socket /tmp/firecracker.socket -i   -X PUT 'http://localhost/drives/
    }"
 ```
 
+## Set network
+FC_MAC="06:00:AC:10:00:02"
+TAP_DEV="tap0"
+curl -X PUT --unix-socket "${API_SOCKET}" \
+    --data "{
+        \"iface_id\": \"net1\",
+        \"guest_mac\": \"$FC_MAC\",
+        \"host_dev_name\": \"$TAP_DEV\"
+    }" \
+    "http://localhost/network-interfaces/net1"
+
+
+
 ## Start the server
 ```
 

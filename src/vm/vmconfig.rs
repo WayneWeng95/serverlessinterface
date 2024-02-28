@@ -3,10 +3,10 @@ use crate::api;
 use crate::vm;
 use std::io;
 
-pub async fn set_up_vm() -> io::Result<()> {
+pub async fn set_up_vm(iplibrary: IpLibrary) -> io::Result<()> {
     let vmsetup = vm::vminfo::VmSetUp::default_test();
 
-    match api::firecrackerapi::initialize_vm(&vmsetup).await {
+    match api::firecrackerapi::initialize_vm(&vmsetup, iplibrary).await {
         Ok(_) => {
             println!("VM configured successfully");
             api::firecrackerapi::instance_control(&vmsetup.socket_path, VmStatus::Running).await?;
@@ -16,23 +16,58 @@ pub async fn set_up_vm() -> io::Result<()> {
     Ok(())
 }
 
-pub fn vm_network() -> VMnetowrk {
-    let netowrk = VMnetowrk::new(
-        "net1".to_string(),
-        "00:1a:4a:16:01:01".to_string(),
-        "eth0".to_string(),
-    );
+use rand::{distributions::Standard, Rng};
 
-    register_network();
+fn generate_random_mac() -> String {
+    let mut rng = rand::thread_rng();
+    let mac_bytes: [u8; 6] = rng.sample(Standard);
+    let mac_address = format!(
+        "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+        mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4], mac_bytes[5]
+    );
+    mac_address
+}
+
+use std::collections::HashMap;
+pub fn network_generate(mut iplibrary: IpLibrary) -> VMnetowrk {
+    let seeds = iplibrary.pop_freelist_or_seeds();
+    let mac = generate_random_mac();
+    let network = set_vmnetwork(seeds, &mac);
+    iplibrary.insert_used(seeds, mac);
+    network
+}
+
+fn set_vmnetwork(seeds: i32, mac: &str) -> VMnetowrk {
+    let (first, second) = calculate_mod_and_divide(seeds);
+
+    let netowrk = VMnetowrk::new(
+        format!("172.16.{}.{}", first, second),
+        format!("net{}", seeds),
+        mac.to_string(),
+        format!("tap{}", seeds),
+    );
+    println!("VM network: {:#?}", netowrk);
 
     netowrk
 }
 
+fn calculate_mod_and_divide(number: i32) -> (i32, i32) {
+    // Calculate the remainder (modulus) when dividing by 255
+    let remainder = number % 255;
+
+    // Calculate the quotient when dividing by 255
+    let quotient = number / 255;
+
+    // Return the remainder and quotient as a tuple
+    (remainder, quotient)
+}
+
 use std::process::Command;
 fn register_network() {
-    //this need the proper access with sudo
-    let tap_dev = std::env::var("TAP_DEV").unwrap_or_else(|_| String::from("tap0"));
-    let tap_ip = std::env::var("TAP_IP").unwrap_or_else(|_| String::from("192.168.0.1"));
+    //this need the proper access with sudo, I think it's better to grant the ip command previleges
+    // Generate the proper network configuration
+    let tap_dev = format!("tap{}", 0);
+    let tap_ip = std::env::var("TAP_IP").unwrap_or_else(|_| String::from("172.16.0.1"));
     let mask_short = std::env::var("MASK_SHORT").unwrap_or_else(|_| String::from("/24"));
 
     // Shell commands

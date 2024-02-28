@@ -88,18 +88,59 @@ impl VmInfo {
 
 #[derive(Debug)] // for debug
 pub struct VMnetowrk {
-    pub iface_id: String,
-    pub guest_mac: String,
-    pub host_dev_name: String,
+    pub ip: String,            //
+    pub iface_id: String,      //netx
+    pub guest_mac: String,     //MAC
+    pub host_dev_name: String, //tapx
 }
 
 impl VMnetowrk {
-    pub fn new(iface_id: String, guest_mac: String, host_dev_name: String) -> Self {
+    pub fn new(ip: String, iface_id: String, guest_mac: String, host_dev_name: String) -> Self {
         VMnetowrk {
+            ip,
             iface_id,
             guest_mac,
             host_dev_name,
         }
+    }
+}
+
+use std::sync::{Arc, Mutex};
+
+pub struct IpLibrary {
+    pub seeds: i32,
+    pub used: Arc<Mutex<HashMap<i32, String>>>,
+    pub freelist: Arc<Mutex<LinkedList<i32>>>,
+}
+
+impl IpLibrary {
+    pub fn new() -> Self {
+        IpLibrary {
+            seeds: 1, // Initialize seeds to 1
+            used: Arc::new(Mutex::new(HashMap::new())),
+            freelist: Arc::new(Mutex::new(LinkedList::new())),
+        }
+    }
+
+    pub fn pop_freelist_or_seeds(&mut self) -> i32 {
+        // Lock the Mutex to access the freelist safely
+        let mut freelist = self.freelist.lock().unwrap();
+
+        // Check if the freelist is empty
+        if let Some(first_item) = freelist.pop_front() {
+            first_item
+        } else {
+            // If freelist is empty, use seeds and increment it
+            let seeds = self.seeds;
+            self.seeds += 1;
+            seeds
+        }
+    }
+
+    pub fn insert_used(&self, key: i32, value: String) {
+        // Lock the Mutex to access the used HashMap safely
+        let mut used = self.used.lock().unwrap();
+        used.insert(key, value);
     }
 }
 
@@ -131,7 +172,10 @@ impl VmRuntime {
     }
 }
 
-use std::collections::HashMap;
+use std::{
+    collections::{HashMap, LinkedList},
+    io::LineWriter,
+};
 
 fn save_into_hashmap() {
     let mut map = std::collections::HashMap::new();

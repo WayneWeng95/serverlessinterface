@@ -4,14 +4,14 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 
 use crate::vm::vmconfig;
-use crate::vm::vminfo::{VmInfo, VmSetUp};
+use crate::vm::vminfo::{IpLibrary, VmInfo, VmSetUp};
 
 // let body = format!(r#"{{                 //The format version of the call body
 //     "kernel_image_path": "{}",
 //     "boot_args": "{}"
 // }}"#, kernel_image_path, boot_args);
 
-pub async fn initialize_vm(vmsetup: &VmSetUp) -> io::Result<()> {
+pub async fn initialize_vm(vmsetup: &VmSetUp, iplibrary: IpLibrary) -> io::Result<()> {
     // let vminfo = VmInfo::new(vmsetup.uuid, image, network, status, config)
     match set_boot_source(
         &vmsetup.socket_path,
@@ -32,7 +32,7 @@ pub async fn initialize_vm(vmsetup: &VmSetUp) -> io::Result<()> {
             {
                 Ok(_) => {
                     println!("Rootfs set successfully");
-                    let vmnetwork = vmconfig::vm_network();
+                    let vmnetwork = vmconfig::network_generate(iplibrary);
                     match set_network(
                         &vmsetup.socket_path,
                         &vmnetwork.iface_id,
@@ -219,8 +219,7 @@ pub async fn instance_control(socket_path: &str, state: VmStatus) -> io::Result<
                             Content-Length: {}\r\n\
                             \r\n\
                             {}",
-        body.len(),
-        body
+        len, body
     );
 
     // Send the request

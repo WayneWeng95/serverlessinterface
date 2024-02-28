@@ -13,7 +13,7 @@ fn main() {
 
     let iplibrary = vm::vminfo::IpLibrary::new();
 
-    // network::network_generate(iplibrary);
+    // network::network_generate(iplibrary);        //done testing
 
     async_main(iplibrary); // for the tokio::main
 

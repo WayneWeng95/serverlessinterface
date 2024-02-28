@@ -14,7 +14,7 @@ use tokio::net::UnixStream;
 
 async fn snapshot_request(state: &str, snapshot_type: &str) -> io::Result<()> {
     // Define the Unix socket path
-    let socket_path = "/tmp/firecracker.socket";
+    let socket_path = "/tmp/firecracker/firecracker.socket";
 
     // Define the request body
     let body = match snapshot_type {

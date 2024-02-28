@@ -21,16 +21,16 @@ pub async fn initialize_vm(vmsetup: VmSetUp) -> io::Result<()> {
         Ok(_) => {
             println!("Boot source set successfully");
             // vmsetup.vm_state = VmStatus::Initializaing;
+            set_rootfs(
+                &vmsetup.socket_path,
+                &vmsetup.rootfs_path,
+                vmsetup.is_read_only,
+            )
+            .await?;
+            instance_control(VmStatus::Running).await?;
         }
         Err(e) => eprintln!("Error setting boot source: {}", e),
     }
-    set_rootfs(
-        &vmsetup.socket_path,
-        &vmsetup.rootfs_path,
-        vmsetup.is_read_only,
-    )
-    .await?;
-    instance_control(VmStatus::Running).await?;
     Ok(())
 }
 
@@ -123,7 +123,7 @@ pub async fn set_rootfs(
 use crate::vm::vminfo::VmStatus;
 async fn instance_control(state: VmStatus) -> io::Result<()> {
     // Define the Unix socket path
-    let socket_path = "/tmp/firecracker.socket";
+    let socket_path = "/tmp/firecracker/firecracker.socket";
 
     // Define the request body
     let body = r#"{

@@ -106,7 +106,7 @@ impl VMnetowrk {
 }
 
 use std::sync::{Arc, Mutex};
-
+#[derive(Debug)] // for debug
 pub struct IpLibrary {
     pub seeds: i32,
     pub used: Arc<Mutex<HashMap<i32, String>>>,

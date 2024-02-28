@@ -1,9 +1,8 @@
-use std::f32::consts::E;
 use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 
-use crate::vm::vmconfig;
+use crate::vm::{network, vmconfig};
 use crate::vm::vminfo::{IpLibrary, VmInfo, VmSetUp};
 
 // let body = format!(r#"{{                 //The format version of the call body
@@ -32,7 +31,7 @@ pub async fn initialize_vm(vmsetup: &VmSetUp, iplibrary: IpLibrary) -> io::Resul
             {
                 Ok(_) => {
                     println!("Rootfs set successfully");
-                    let vmnetwork = vmconfig::network_generate(iplibrary);
+                    let vmnetwork = network::network_generate(iplibrary);
                     match set_network(
                         &vmsetup.socket_path,
                         &vmnetwork.iface_id,

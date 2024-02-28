@@ -1,3 +1,5 @@
+use crate::vm::network;
+
 mod api;
 mod fuse;
 mod security;
@@ -11,7 +13,7 @@ fn main() {
 
     let iplibrary = vm::vminfo::IpLibrary::new();
 
-    // vm::vmconfig::network_generate(iplibrary);
+    // network::network_generate(iplibrary);
 
     async_main(iplibrary); // for the tokio::main
 

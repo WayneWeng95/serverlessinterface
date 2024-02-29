@@ -24,6 +24,8 @@ pub fn network_generate(mut iplibrary: IpLibrary) -> VMnetowrk {
 fn set_vmnetwork(seeds: i32, mac: &str) -> VMnetowrk {
     let (remainder, quotient) = calculate_mod_and_divide(seeds);
 
+    // register_network(seeds, remainder, quotient);    //System level registration
+
     let netowrk = VMnetowrk::new(
         format!("172.16.{}.{}", quotient, remainder),
         format!("net{}", seeds),
@@ -46,12 +48,12 @@ fn calculate_mod_and_divide(number: i32) -> (i32, i32) {
 }
 
 use std::process::Command;
-fn register_network() {
+fn register_network(seeds: i32, remainder: i32, quotient: i32) {
     //this need the proper access with sudo, I think it's better to grant the ip command previleges
     // Generate the proper network configuration
-    let tap_dev = format!("tap{}", 0);
-    let tap_ip = std::env::var("TAP_IP").unwrap_or_else(|_| String::from("172.16.0.1"));
-    let mask_short = std::env::var("MASK_SHORT").unwrap_or_else(|_| String::from("/24"));
+    let tap_dev = format!("tap{}", seeds);
+    let tap_ip = format!("172.16.{}.{}", quotient, remainder);
+    let mask_short = String::from("/24");
 
     // Shell commands
     let commands = [

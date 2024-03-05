@@ -9,7 +9,7 @@ pub async fn set_up_vm(iplibrary: & mut IpLibrary) -> io::Result<()> {
     match api::firecrackerapi::initialize_vm(&vmsetup, iplibrary).await {
         Ok(_) => {
             println!("VM configured successfully");
-            api::firecrackerapi::instance_control(&vmsetup.socket_path, VmStatus::Running).await?;
+            // api::firecrackerapi::instance_control(&vmsetup.socket_path, VmStatus::Running).await?;
         }
         Err(e) => eprintln!("Error: {}", e),
     }

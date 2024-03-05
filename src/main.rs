@@ -40,9 +40,9 @@ async fn async_main(iplibrary: &mut vm::vminfo::IpLibrary) {
     if let Err(err) = vm::vmconfig::set_up_vm(iplibrary).await {
         eprintln!("Error: {}", err);
     }
-    if let Err(err) = vm::vmconfig::set_up_vm(iplibrary).await {
-        eprintln!("Error: {}", err);
-    }
+    // if let Err(err) = vm::vmconfig::set_up_vm(iplibrary).await {
+    //     eprintln!("Error: {}", err);
+    // }
 
     // send_request("Paused", "").await?; // Send PATCH request to pause VM
     // send_request("Resumed", "").await?; // Send PATCH request to resume VM

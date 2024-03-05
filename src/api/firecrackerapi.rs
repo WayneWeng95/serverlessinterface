@@ -1,9 +1,11 @@
 use std::io;
+use chacha20poly1305::consts::True;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
+use tokio::time::Duration;
 
-use crate::vm::{network, vmconfig};
 use crate::vm::vminfo::{IpLibrary, VmInfo, VmSetUp};
+use crate::vm::{network, vmconfig};
 
 // let body = format!(r#"{{                 //The format version of the call body
 //     "kernel_image_path": "{}",
@@ -12,6 +14,9 @@ use crate::vm::vminfo::{IpLibrary, VmInfo, VmSetUp};
 
 pub async fn initialize_vm(vmsetup: &VmSetUp, iplibrary: &mut IpLibrary) -> io::Result<()> {
     // let vminfo = VmInfo::new(vmsetup.uuid, image, network, status, config)
+    // let microseconds = 100;
+    // let duration = Duration::from_micros(microseconds);
+    // tokio::time::sleep(duration).await;
     match set_boot_source(
         &vmsetup.socket_path,
         &vmsetup.kernel_image_path,
@@ -21,6 +26,7 @@ pub async fn initialize_vm(vmsetup: &VmSetUp, iplibrary: &mut IpLibrary) -> io::
     {
         Ok(_) => {
             println!("Boot source set successfully");
+            // tokio::time::sleep(duration).await;
             // vmsetup.vm_state = VmStatus::Initializaing;
             match set_rootfs(
                 &vmsetup.socket_path,
@@ -31,6 +37,7 @@ pub async fn initialize_vm(vmsetup: &VmSetUp, iplibrary: &mut IpLibrary) -> io::
             {
                 Ok(_) => {
                     println!("Rootfs set successfully");
+                    // tokio::time::sleep(duration).await;
                     let vmnetwork = network::network_generate(iplibrary);
                     match set_network(
                         &vmsetup.socket_path,
@@ -91,10 +98,13 @@ pub async fn set_boot_source(
 
     // Read the response
     let mut response = String::new();
-    stream.read_to_string(&mut response).await?;
-    println!("{}", response);
-
-    Ok(())
+    match stream.read_to_string(&mut response).await {      //Here has some problem with the return types, need some further checks
+        Ok(_) => {
+            return Ok(());
+        }
+        Err(e) => return Err(e),
+    };
+    // println!("{}", response);
 }
 
 pub async fn set_rootfs(
@@ -134,10 +144,12 @@ pub async fn set_rootfs(
 
     // Read the response
     let mut response = String::new();
-    stream.read_to_string(&mut response).await?;
-    println!("{}", response);
-
-    Ok(())
+    match stream.read_to_string(&mut response).await {
+        Ok(_) => {
+            return Ok(());
+        }
+        Err(e) => return Err(e),
+    };
 }
 
 async fn set_network(
@@ -147,7 +159,7 @@ async fn set_network(
     host_dev_name: &str,
 ) -> io::Result<()> {
     let body = format!(
-        r#"{{                 //The format version of the call body
+        r#"{{
         "iface_id": "{}",
         "guest_mac": "{}",
         "host_dev_name": "{}"
@@ -158,7 +170,7 @@ async fn set_network(
     let mut stream = UnixStream::connect(socket_path).await?;
 
     let request = format!(
-        "PUT network-interfaces/{} HTTP/1.1\r\n\
+        "PUT /network-interfaces/{} HTTP/1.1\r\n\
                                 Host: localhost\r\n\
                                 Content-Type: application/json\r\n\
                                 Content-Length: {}\r\n\
@@ -171,9 +183,10 @@ async fn set_network(
 
     stream.write_all(request.as_bytes()).await?;
 
-    let mut response = String::new();
-    stream.read_to_string(&mut response).await?;
-    println!("{}", response);
+    // Read the response
+    // let mut response = String::new();
+    // stream.read_to_string(&mut response).await?;
+    // println!("{}", response);
 
     Ok(())
 }
@@ -225,9 +238,11 @@ pub async fn instance_control(socket_path: &str, state: VmStatus) -> io::Result<
     stream.write_all(request.as_bytes()).await?;
 
     // Read the response
-    let mut response = String::new();
-    stream.read_to_string(&mut response).await?;
-    println!("{}", response);
+    // let mut response = String::new();
+    // stream.read_to_string(&mut response).await?;
+    // println!("{}", response);
 
     Ok(())
 }
+
+pub async fn set_log() {}

@@ -187,6 +187,12 @@ curl -X PUT --unix-socket "${API_SOCKET}" \
     "http://localhost/network-interfaces/net1"
 
 
+## Reset network
+sudo ip link del tap1 2> /dev/null || true
+sudo ip tuntap add dev tap1 mode tap
+sudo ip addr add 172.16.0.1/30 dev tap1
+sudo ip link set dev tap1 up
+
 
 ## Start the server
 ```

@@ -16,7 +16,7 @@ pub fn network_generate(iplibrary: &mut IpLibrary) -> VMnetowrk {
     let mac = generate_random_mac();
     let network = set_vmnetwork(seeds, &mac);
     iplibrary.insert_used(seeds, mac);
-    println!("IP Library: {:#?}", iplibrary);
+    // println!("IP Library: {:#?}", iplibrary);
     network
 }
 
@@ -33,10 +33,7 @@ fn set_vmnetwork(seeds: i32, mac: &str) -> VMnetowrk {
         format!("tap{}", seeds),
     );
 
-    let task = task::spawn(async {
-        println!("This is a message printed asynchronously.");
-    });
-    println!("VM network: {:#?}", netowrk);
+    // println!("VM network: {:#?}", netowrk);
     netowrk
 }
 

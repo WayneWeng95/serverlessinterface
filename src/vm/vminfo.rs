@@ -20,7 +20,7 @@ impl VmSetUp {
         mem_size_mib: u32,
     ) -> Self {
         let uuid = generate_uuid();
-        let socket_path = format!("/tmp/firecracker/firecracker_{}.socket", uuid.to_string());
+        let socket_path = format!("/tmp/firecracker.socket");
         VmSetUp {
             uuid,
             socket_path,
@@ -35,11 +35,11 @@ impl VmSetUp {
 
     pub fn default_test() -> Self {
         let uuid = generate_uuid();
-        let socket_path = format!("/tmp/firecracker/firecracker_{}.socket", uuid.to_string());
+        let socket_path = format!("/tmp/firecracker.socket");
         Self {
             uuid: uuid,
             socket_path: socket_path,
-            kernel_image_path: "/home/shared/images/kernel_image".to_string(),
+            kernel_image_path: "/home/shared/images/vmlinux-5.10.198".to_string(),
             boot_args: "console=ttyS0 reboot=k panic=1 pci=off".to_string(),
             rootfs_path: "/home/shared/images/ubuntu-22.04.ext4".to_string(),
             is_read_only: false,

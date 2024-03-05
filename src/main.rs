@@ -1,5 +1,5 @@
 use crate::vm::network;
-
+use tokio::task;
 mod api;
 mod fuse;
 mod security;
@@ -40,6 +40,7 @@ async fn async_main(iplibrary: &mut vm::vminfo::IpLibrary) {
     if let Err(err) = vm::vmconfig::set_up_vm(iplibrary).await {
         eprintln!("Error: {}", err);
     }
+
     // if let Err(err) = vm::vmconfig::set_up_vm(iplibrary).await {
     //     eprintln!("Error: {}", err);
     // }
@@ -49,3 +50,9 @@ async fn async_main(iplibrary: &mut vm::vminfo::IpLibrary) {
     // send_request("", "Full").await?; // Send PUT request for full snapshot
     // send_request("", "Diff").await?; // Send PUT request for diff snapshot
 }
+
+// async fn spawn_vm() {
+//     if let Err(err) = vm::vmconfig::set_up_vm(iplibrary).await {     //think about how the network configuration works in this level
+//         eprintln!("Error: {}", err);
+//     }
+// }

@@ -1,7 +1,8 @@
-use std::io;
 use chacha20poly1305::consts::True;
+use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
+use tokio::time::sleep;
 use tokio::time::Duration;
 
 use crate::vm::vminfo::{IpLibrary, VmInfo, VmSetUp};
@@ -26,7 +27,6 @@ pub async fn initialize_vm(vmsetup: &VmSetUp, iplibrary: &mut IpLibrary) -> io::
     {
         Ok(_) => {
             println!("Boot source set successfully");
-            // tokio::time::sleep(duration).await;
             // vmsetup.vm_state = VmStatus::Initializaing;
             match set_rootfs(
                 &vmsetup.socket_path,
@@ -37,7 +37,6 @@ pub async fn initialize_vm(vmsetup: &VmSetUp, iplibrary: &mut IpLibrary) -> io::
             {
                 Ok(_) => {
                     println!("Rootfs set successfully");
-                    // tokio::time::sleep(duration).await;
                     let vmnetwork = network::network_generate(iplibrary);
                     match set_network(
                         &vmsetup.socket_path,
@@ -95,16 +94,9 @@ pub async fn set_boot_source(
 
     // Send the request
     stream.write_all(request.as_bytes()).await?;
+    sleep(Duration::from_micros(50)).await; //Add a delay to avoid all the request sent at the same time
 
-    // Read the response
-    let mut response = String::new();
-    match stream.read_to_string(&mut response).await {      //Here has some problem with the return types, need some further checks
-        Ok(_) => {
-            return Ok(());
-        }
-        Err(e) => return Err(e),
-    };
-    // println!("{}", response);
+    Ok(())
 }
 
 pub async fn set_rootfs(
@@ -141,15 +133,9 @@ pub async fn set_rootfs(
 
     // Send the request
     stream.write_all(request.as_bytes()).await?;
+    sleep(Duration::from_micros(50)).await; //Add a delay to avoid all the request sent at the same time
 
-    // Read the response
-    let mut response = String::new();
-    match stream.read_to_string(&mut response).await {
-        Ok(_) => {
-            return Ok(());
-        }
-        Err(e) => return Err(e),
-    };
+    Ok(())
 }
 
 async fn set_network(
@@ -182,11 +168,7 @@ async fn set_network(
     );
 
     stream.write_all(request.as_bytes()).await?;
-
-    // Read the response
-    // let mut response = String::new();
-    // stream.read_to_string(&mut response).await?;
-    // println!("{}", response);
+    sleep(Duration::from_micros(50)).await; //Add a delay to avoid all the request sent at the same time
 
     Ok(())
 }
@@ -239,7 +221,7 @@ pub async fn instance_control(socket_path: &str, state: VmStatus) -> io::Result<
 
     // Read the response
     // let mut response = String::new();
-    // stream.read_to_string(&mut response).await?;
+    // stream.read_to_string(&mut response).await?;        //This one appears with similiar problem?
     // println!("{}", response);
 
     Ok(())

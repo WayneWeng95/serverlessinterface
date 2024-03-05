@@ -11,8 +11,7 @@ fn generate_random_mac() -> String {
     mac_address
 }
 
-use std::collections::HashMap;
-pub fn network_generate(mut iplibrary: IpLibrary) -> VMnetowrk {
+pub fn network_generate(iplibrary: &mut IpLibrary) -> VMnetowrk {
     let seeds = iplibrary.pop_freelist_or_seeds();
     let mac = generate_random_mac();
     let network = set_vmnetwork(seeds, &mac);
@@ -21,6 +20,7 @@ pub fn network_generate(mut iplibrary: IpLibrary) -> VMnetowrk {
     network
 }
 
+use tokio::task;
 fn set_vmnetwork(seeds: i32, mac: &str) -> VMnetowrk {
     let (remainder, quotient) = calculate_mod_and_divide(seeds);
 
@@ -32,6 +32,10 @@ fn set_vmnetwork(seeds: i32, mac: &str) -> VMnetowrk {
         mac.to_string(),
         format!("tap{}", seeds),
     );
+
+    let task = task::spawn(async {
+        println!("This is a message printed asynchronously.");
+    });
     println!("VM network: {:#?}", netowrk);
     netowrk
 }

@@ -11,11 +11,13 @@ fn main() {
 
     test_main();
 
-    let iplibrary = vm::vminfo::IpLibrary::new();
+    let mut iplibrary = vm::vminfo::IpLibrary::new();
 
     // network::network_generate(iplibrary);        //done testing
 
-    async_main(iplibrary); // for the tokio::main
+    let p = &mut iplibrary;
+
+    async_main(p); // for the tokio::main
 
     // chunks::chunks_cutting().unwrap();
 
@@ -34,7 +36,10 @@ fn test_main() {
 }
 
 #[tokio::main] //temporarily comment out for testing
-async fn async_main(iplibrary: vm::vminfo::IpLibrary) {
+async fn async_main(iplibrary: &mut vm::vminfo::IpLibrary) {
+    if let Err(err) = vm::vmconfig::set_up_vm(iplibrary).await {
+        eprintln!("Error: {}", err);
+    }
     if let Err(err) = vm::vmconfig::set_up_vm(iplibrary).await {
         eprintln!("Error: {}", err);
     }

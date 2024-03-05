@@ -10,7 +10,7 @@ use crate::vm::vminfo::{IpLibrary, VmInfo, VmSetUp};
 //     "boot_args": "{}"
 // }}"#, kernel_image_path, boot_args);
 
-pub async fn initialize_vm(vmsetup: &VmSetUp, iplibrary: IpLibrary) -> io::Result<()> {
+pub async fn initialize_vm(vmsetup: &VmSetUp, iplibrary: &mut IpLibrary) -> io::Result<()> {
     // let vminfo = VmInfo::new(vmsetup.uuid, image, network, status, config)
     match set_boot_source(
         &vmsetup.socket_path,

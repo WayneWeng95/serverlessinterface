@@ -7,13 +7,14 @@ use tokio::time::Duration;
 
 use crate::vm::vminfo::{IpLibrary, VmInfo, VmSetUp};
 use crate::vm::{network, vmconfig};
+use std::process::Command;
 
 // let body = format!(r#"{{                 //The format version of the call body
 //     "kernel_image_path": "{}",
 //     "boot_args": "{}"
 // }}"#, kernel_image_path, boot_args);
 
-pub async fn initialize_vm(vmsetup: &VmSetUp, iplibrary: &mut IpLibrary) -> io::Result<()> {
+pub async fn initialize_vm(vmsetup: &VmSetUp, uid: i32) -> io::Result<()> {
     // let vminfo = VmInfo::new(vmsetup.uuid, image, network, status, config)
     // let microseconds = 100;
     // let duration = Duration::from_micros(microseconds);
@@ -37,7 +38,7 @@ pub async fn initialize_vm(vmsetup: &VmSetUp, iplibrary: &mut IpLibrary) -> io::
             {
                 Ok(_) => {
                     println!("Rootfs set successfully");
-                    let vmnetwork = network::network_generate(iplibrary);
+                    let vmnetwork = network::set_vmnetwork(uid, &vmsetup.mac_address);
                     match set_network(
                         &vmsetup.socket_path,
                         &vmnetwork.iface_id,
@@ -218,6 +219,8 @@ pub async fn instance_control(socket_path: &str, state: VmStatus) -> io::Result<
 
     // Send the request
     stream.write_all(request.as_bytes()).await?;
+
+    sleep(Duration::from_micros(50)).await; //Add a delay to avoid all the request sent at the same time
 
     // Read the response
     // let mut response = String::new();

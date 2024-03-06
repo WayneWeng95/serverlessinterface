@@ -1,27 +1,6 @@
 use super::vminfo::*;
-use rand::{distributions::Standard, Rng};
 
-fn generate_random_mac() -> String {
-    let mut rng = rand::thread_rng();
-    let mac_bytes: [u8; 6] = rng.sample(Standard);
-    let mac_address = format!(
-        "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-        mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4], mac_bytes[5]
-    );
-    mac_address
-}
-
-pub fn network_generate(iplibrary: &mut IpLibrary) -> VMnetowrk {
-    let seeds = iplibrary.pop_freelist_or_seeds();
-    let mac = generate_random_mac();
-    let network = set_vmnetwork(seeds, &mac);
-    iplibrary.insert_used(seeds, mac);
-    // println!("IP Library: {:#?}", iplibrary);
-    network
-}
-
-use tokio::task;
-fn set_vmnetwork(seeds: i32, mac: &str) -> VMnetowrk {
+pub fn set_vmnetwork(seeds: i32, mac: &str) -> VMnetowrk {
     let (remainder, quotient) = calculate_mod_and_divide(seeds);
 
     // register_network(seeds, remainder, quotient);    //System level registration
@@ -49,6 +28,28 @@ fn calculate_mod_and_divide(number: i32) -> (i32, i32) {
 }
 
 use std::process::Command;
+
+fn derigister_network(seeds: i32) {
+    //Just generated
+    //this need the proper access with sudo, I think it's better to grant the ip command previleges
+    // Generate the proper network configuration
+    let tap_dev = format!("tap{}", seeds);
+
+    // Shell commands
+    let commands = [format!("sudo ip link del {}", tap_dev)];
+
+    // Execute each command
+    for cmd in &commands {
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(cmd)
+            .output()
+            .expect("Failed to execute command");
+        println!("{}", String::from_utf8_lossy(&output.stdout));
+        println!("{}", String::from_utf8_lossy(&output.stderr));
+    }
+}
+
 fn register_network(seeds: i32, remainder: i32, quotient: i32) {
     //this need the proper access with sudo, I think it's better to grant the ip command previleges
     // Generate the proper network configuration

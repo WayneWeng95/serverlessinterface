@@ -19,19 +19,19 @@ fn main() {
 
     let mut map: HashMap<i32, vm::vminfo::VmSetUp> = std::collections::HashMap::new();
 
-    let mut iplibrary = vm::vminfo::IpLibrary::new();
+    // let mut iplibrary = vm::vminfo::IpLibrary::new();
 
-    test_main(1); //testing with 1
+    // test_main(1); //testing with 1
 
-    // network::network_generate(iplibrary);        //done testing
+    // // network::network_generate(iplibrary);        //done testing
 
-    let uid = iplibrary.pop_freelist_or_seeds();
+    // let uid = iplibrary.pop_freelist_or_seeds();
 
-    let vm = vm::vminfo::VmSetUp::default_test(uid);
+    // let vm = vm::vminfo::VmSetUp::default_test(uid);
 
-    start_firecracker(uid);
+    // async_main(vm, uid); // for the tokio::main
 
-    async_main(vm, uid); // for the tokio::main
+    async_main();
 
     // chunks::chunks_cutting().unwrap();
 
@@ -49,25 +49,71 @@ fn test_main(uid: i32) {
     println!("VM setup: {:#?}", vmsetup);
 }
 
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::thread::sleep;
-fn start_firecracker(uid: i32) {
-    // let socket = format!("/tmp/firecracker/No{}.socket", uid);
-    let socket = format!("/tmp/firecracker.socket"); //simple demo
-    Command::new("firecracker")
+fn start_firecracker(socket: String) {
+    let child = Command::new("firecracker")
         .arg("--api-sock")
         .arg(socket)
-        .output()
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()
         .expect("Failed to execute firecracker command");
 
-    sleep(std::time::Duration::from_micros(100)); //Add a delay
+    sleep(std::time::Duration::from_secs(1)); //Add a delay
+                                              // Get the PID of the spawned process
+    let pid = child.id();
+
+    println!("PID of the spawned process: {}", pid);
 }
 
 #[tokio::main] //temporarily comment out for testing
-async fn async_main(vm: vm::vminfo::VmSetUp, uid: i32) {
-    if let Err(err) = vm::vmconfig::set_up_vm(vm, uid).await {
-        eprintln!("Error: {}", err);
-    }
+async fn async_main() {
+    // let socket = vm.socket_path.clone();
+    // let handle = task::spawn_blocking(|| {
+    //     start_firecracker(socket);
+    // });
+    let mut iplibrary = vm::vminfo::IpLibrary::new();
+
+    let uid1 = iplibrary.pop_freelist_or_seeds();
+
+    let vm1 = vm::vminfo::VmSetUp::default_test(uid1);
+
+    let socket = vm1.socket_path.clone();
+
+    start_firecracker(socket);
+
+    sleep(std::time::Duration::from_secs(1));
+
+    let handle1 = tokio::spawn(async move {
+        if let Err(err) = vm::vmconfig::set_up_vm(vm1, uid1).await {
+            eprintln!("Error: {}", err);
+        }
+    });
+
+    // let uid2 = iplibrary.pop_freelist_or_seeds();
+
+    // let vm2 = vm::vminfo::VmSetUp::default_test(uid2);
+
+    // let handle2 = tokio::spawn(async move {
+    //     if let Err(err) = vm::vmconfig::set_up_vm(vm2, uid2).await {
+    //         eprintln!("Error: {}", err);
+    //     }
+    // });
+
+    // let uid3 = iplibrary.pop_freelist_or_seeds();
+
+    // let vm3 = vm::vminfo::VmSetUp::default_test(uid3);
+
+    // let handle3 = tokio::spawn(async move {
+    //     if let Err(err) = vm::vmconfig::set_up_vm(vm3, uid3).await {
+    //         eprintln!("Error: {}", err);
+    //     }
+    // });
+
+    handle1.await.expect("Failed to wait for task 1");
+    // handle2.await.expect("Failed to wait for task 2");
+    // handle3.await.expect("Failed to wait for task 3");
 
     // if let Err(err) = vm::vmconfig::set_up_vm(iplibrary).await {
     //     eprintln!("Error: {}", err);

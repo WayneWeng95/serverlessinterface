@@ -23,7 +23,8 @@ impl VmSetUp {
         mem_size_mib: u32,
     ) -> Self {
         let uuid = generate_uuid();
-        let socket_path = format!("/tmp/firecracker.socket");
+        // let socket_path = format!("/tmp/firecracker.socket");
+        let socket_path = format!("/tmp/firecracker_{}.socket", uid);
         let mac_address = generate_random_mac();
         VmSetUp {
             uid,
@@ -41,8 +42,8 @@ impl VmSetUp {
 
     pub fn default_test(uid: i32) -> Self {
         let uuid = generate_uuid();
-        let socket_path = format!("/tmp/firecracker.socket");
-        // let socket_path = format!("/tmp/firecracker/No{}.socket", uid);
+        // let socket_path = format!("/tmp/firecracker.socket");
+        let socket_path = format!("/tmp/firecracker_{}.socket", uid);
         let mac_address = generate_random_mac();
         Self {
             uid: uid,

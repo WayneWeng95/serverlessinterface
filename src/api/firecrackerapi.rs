@@ -38,20 +38,20 @@ pub async fn initialize_vm(vmsetup: &VmSetUp, uid: i32) -> io::Result<()> {
             {
                 Ok(_) => {
                     println!("Rootfs set successfully");
-                    let vmnetwork = network::set_vmnetwork(uid, &vmsetup.mac_address);
-                    match set_network(
-                        &vmsetup.socket_path,
-                        &vmnetwork.iface_id,
-                        &vmnetwork.guest_mac,
-                        &vmnetwork.host_dev_name,
-                    )
-                    .await
-                    {
-                        Ok(_) => {
-                            println!("Network set successfully");
-                        }
-                        Err(e) => eprintln!("Error setting network: {}", e),
-                    }
+                    // let vmnetwork = network::set_vmnetwork(uid, &vmsetup.mac_address);
+                    // match set_network(
+                    //     &vmsetup.socket_path,
+                    //     &vmnetwork.iface_id,
+                    //     &vmnetwork.guest_mac,
+                    //     &vmnetwork.host_dev_name,
+                    // )
+                    // .await
+                    // {
+                    //     Ok(_) => {
+                    //         println!("Network set successfully");
+                    //     }
+                    //     Err(e) => eprintln!("Error setting network: {}", e),
+                    // }
                 }
                 Err(e) => eprintln!("Error setting rootfs: {}", e),
             }

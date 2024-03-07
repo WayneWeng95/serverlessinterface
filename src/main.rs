@@ -1,23 +1,84 @@
-use crate::vm::network;
-use tokio::task;
 mod api;
 mod fuse;
 mod security;
 mod vm;
 
+use crate::vm::network;
 use std::collections::HashMap;
+use std::env;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use tokio::task;
+use vm::vminfo::{self, IpLibrary};
 
-fn save_into_hashmap() {
-    let mut map = std::collections::HashMap::new();
-    map.insert("key1", "value1");
-    map.insert("key2", "value2");
+fn metadata(
+    iplibrary: Arc<Mutex<IpLibrary>>,
+    vm_map: Arc<Mutex<HashMap<i32, vm::vminfo::VmInfo>>>,
+) -> (i32, vm::vminfo::VmSetUp) {
+    let uid = iplibrary.lock().unwrap().pop_freelist_or_seeds();
+    let mut map = vm_map.lock().unwrap();
+    let mac = vm::generator::generate_random_mac();
+    let uuid = vm::generator::generate_uuid();
+    let network = network::set_vmnetwork(uid, &mac);
+    let vm = vm::vminfo::VmSetUp::default_test(uid, uuid);
+    let vminfo = vminfo::VmInfo::new(
+        uid,
+        uuid,
+        "image".to_string(),
+        network,
+        vm::vminfo::VmStatus::Initializaing,
+        vm.clone(),
+    );
+
+    map.insert(uid, vminfo);
+    (uid, vm)
 }
 
 fn main() {
     println!("Hello, world!");
-    println!("{}", vm::vminfo::generate_uuid());
 
-    let mut map: HashMap<i32, vm::vminfo::VmSetUp> = std::collections::HashMap::new();
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() < 2 {
+        println!("Usage: cargo run -- <input_variable>");
+        return;
+    }
+
+    let input_variable: i32 = match args[1].parse() {
+        Ok(num) => num,
+        Err(_) => {
+            println!("Input variable must be an integer");
+            return;
+        }
+    };
+
+    let num_threads = input_variable; // Number of threads to spawn
+
+    api::systemapi::remove_socket_files();
+
+    let vm_map: Arc<Mutex<HashMap<i32, vm::vminfo::VmInfo>>> = Arc::new(Mutex::new(HashMap::new()));
+
+    let iplibrary = Arc::new(Mutex::new(vm::vminfo::IpLibrary::new()));
+
+    // let num_threads = 5; // Number of threads to spawn
+
+    let handles: Vec<_> = (0..num_threads)
+        .map(|_| {
+            let iplibrary_clone = Arc::clone(&iplibrary);
+            let vm_map_clone = Arc::clone(&vm_map);
+
+            thread::spawn(move || {
+                let (uid, vm) = metadata(Arc::clone(&iplibrary_clone), Arc::clone(&vm_map_clone));
+                api::systemapi::start_firecracker(vm.socket_path.clone());
+                async_main(uid, vm);
+            })
+        })
+        .collect();
+
+    // Wait for all threads to finish
+    for handle in handles {
+        handle.join().unwrap();
+    }
 
     // let mut iplibrary = vm::vminfo::IpLibrary::new();
 
@@ -31,8 +92,6 @@ fn main() {
 
     // async_main(vm, uid); // for the tokio::main
 
-    async_main();
-
     // chunks::chunks_cutting().unwrap();
 
     // chunks::chunks_restoring().unwrap();
@@ -42,78 +101,33 @@ fn main() {
     // encrypt::crypto_demo().unwrap();
 }
 
-fn test_main(uid: i32) {
-    //functional tests
-    let vmsetup = vm::vminfo::VmSetUp::default_test(uid);
+#[tokio::main]
+// async fn
 
-    println!("VM setup: {:#?}", vmsetup);
-}
-
-use std::process::{Command, Stdio};
-use std::thread::sleep;
-fn start_firecracker(socket: String) {
-    let child = Command::new("firecracker")
-        .arg("--api-sock")
-        .arg(socket)
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .expect("Failed to execute firecracker command");
-
-    sleep(std::time::Duration::from_secs(1)); //Add a delay
-                                              // Get the PID of the spawned process
-    let pid = child.id();
-
-    println!("PID of the spawned process: {}", pid);
-}
-
-#[tokio::main] //temporarily comment out for testing
-async fn async_main() {
+async fn async_main(uid: i32, vm: vm::vminfo::VmSetUp) {
     // let socket = vm.socket_path.clone();
     // let handle = task::spawn_blocking(|| {
     //     start_firecracker(socket);
     // });
-    let mut iplibrary = vm::vminfo::IpLibrary::new();
+    // let mut iplibrary = vm::vminfo::IpLibrary::new();
 
-    let uid1 = iplibrary.pop_freelist_or_seeds();
+    // let uid1 = iplibrary.pop_freelist_or_seeds();
 
-    let vm1 = vm::vminfo::VmSetUp::default_test(uid1);
+    // let vm1 = vm::vminfo::VmSetUp::default_test(uid1);
 
-    let socket = vm1.socket_path.clone();
+    // let socket = vm1.socket_path.clone();
 
-    start_firecracker(socket);
+    // start_firecracker(socket);
 
-    sleep(std::time::Duration::from_secs(1));
+    // sleep(std::time::Duration::from_secs(1));
 
     let handle1 = tokio::spawn(async move {
-        if let Err(err) = vm::vmconfig::set_up_vm(vm1, uid1).await {
+        if let Err(err) = vm::vmconfig::set_up_vm(uid, vm).await {
             eprintln!("Error: {}", err);
         }
     });
 
-    // let uid2 = iplibrary.pop_freelist_or_seeds();
-
-    // let vm2 = vm::vminfo::VmSetUp::default_test(uid2);
-
-    // let handle2 = tokio::spawn(async move {
-    //     if let Err(err) = vm::vmconfig::set_up_vm(vm2, uid2).await {
-    //         eprintln!("Error: {}", err);
-    //     }
-    // });
-
-    // let uid3 = iplibrary.pop_freelist_or_seeds();
-
-    // let vm3 = vm::vminfo::VmSetUp::default_test(uid3);
-
-    // let handle3 = tokio::spawn(async move {
-    //     if let Err(err) = vm::vmconfig::set_up_vm(vm3, uid3).await {
-    //         eprintln!("Error: {}", err);
-    //     }
-    // });
-
     handle1.await.expect("Failed to wait for task 1");
-    // handle2.await.expect("Failed to wait for task 2");
-    // handle3.await.expect("Failed to wait for task 3");
 
     // if let Err(err) = vm::vmconfig::set_up_vm(iplibrary).await {
     //     eprintln!("Error: {}", err);
@@ -124,9 +138,3 @@ async fn async_main() {
     // send_request("", "Full").await?; // Send PUT request for full snapshot
     // send_request("", "Diff").await?; // Send PUT request for diff snapshot
 }
-
-// async fn spawn_vm() {
-//     if let Err(err) = vm::vmconfig::set_up_vm(iplibrary).await {     //think about how the network configuration works in this level
-//         eprintln!("Error: {}", err);
-//     }
-// }

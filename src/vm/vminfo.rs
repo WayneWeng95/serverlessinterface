@@ -1,9 +1,10 @@
-#[derive(Debug)] // for debug
+use uuid::Uuid;
+
+#[derive(Debug, Clone)] // for debug
 pub struct VmSetUp {
     pub uid: i32,
     pub uuid: Uuid,
     pub socket_path: String,
-    pub mac_address: String,
     pub kernel_image_path: String,
     pub boot_args: String,
     pub rootfs_path: String,
@@ -15,6 +16,7 @@ pub struct VmSetUp {
 impl VmSetUp {
     pub fn new(
         uid: i32,
+        uuid: Uuid,
         kernel_image_path: String,
         boot_args: String,
         rootfs_path: String,
@@ -22,14 +24,11 @@ impl VmSetUp {
         vcpu_count: u32,
         mem_size_mib: u32,
     ) -> Self {
-        let uuid = generate_uuid();
         // let socket_path = format!("/tmp/firecracker.socket");
         let socket_path = format!("/tmp/firecracker_{}.socket", uid);
-        let mac_address = generate_random_mac();
         VmSetUp {
             uid,
             uuid,
-            mac_address,
             socket_path,
             kernel_image_path,
             boot_args,
@@ -40,15 +39,12 @@ impl VmSetUp {
         }
     }
 
-    pub fn default_test(uid: i32) -> Self {
-        let uuid = generate_uuid();
+    pub fn default_test(uid: i32, uuid: Uuid) -> Self {
         // let socket_path = format!("/tmp/firecracker.socket");
         let socket_path = format!("/tmp/firecracker_{}.socket", uid);
-        let mac_address = generate_random_mac();
         Self {
             uid: uid,
             uuid: uuid,
-            mac_address: mac_address,
             socket_path: socket_path,
             kernel_image_path: "/home/shared/images/vmlinux-5.10.198".to_string(),
             boot_args: "console=ttyS0 reboot=k panic=1 pci=off".to_string(),
@@ -60,7 +56,7 @@ impl VmSetUp {
     }
 }
 
-#[derive(Debug)] // for debug
+#[derive(Debug, Clone)] // for debug
 pub enum VmStatus {
     Initializaing,
     Ready,
@@ -70,24 +66,27 @@ pub enum VmStatus {
     Terminated,
 }
 
-#[derive(Debug)] // for debug
+#[derive(Debug, Clone)] // for debug
 pub struct VmInfo {
-    pub uuid: Uuid,
-    image: String,
-    network: String,
+    uid: i32,
+    uuid: Uuid,
+    image: String, //This is not in use now
+    network: VMnetowrk,
     status: VmStatus,
     config: VmSetUp,
 }
 
 impl VmInfo {
     pub fn new(
+        uid: i32,
         uuid: Uuid,
         image: String,
-        network: String,
+        network: VMnetowrk,
         status: VmStatus,
         config: VmSetUp,
     ) -> Self {
         VmInfo {
+            uid,
             uuid,
             image,
             network,
@@ -97,7 +96,7 @@ impl VmInfo {
     }
 }
 
-#[derive(Debug)] // for debug
+#[derive(Debug, Clone)] // for debug
 pub struct VMnetowrk {
     pub ip: String,            //
     pub iface_id: String,      //netx
@@ -184,24 +183,4 @@ impl VmRuntime {
         self.storage = storage;
         self.pid = pid;
     }
-}
-
-use uuid::Uuid;
-
-pub fn generate_uuid() -> Uuid {
-    let uuid = uuid::Uuid::new_v4();
-    // println!("{}", uuid);
-    uuid
-}
-
-use rand::{distributions::Standard, Rng};
-
-fn generate_random_mac() -> String {
-    let mut rng = rand::thread_rng();
-    let mac_bytes: [u8; 6] = rng.sample(Standard);
-    let mac_address = format!(
-        "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-        mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4], mac_bytes[5]
-    );
-    mac_address
 }

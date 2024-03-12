@@ -33,3 +33,15 @@ pub async fn end_vm(vm: vm::vminfo::VmSetUp) -> io::Result<()> {
 
     Ok(())
 }
+
+pub async fn snapshot_vm(vm: vm::vminfo::VmSetUp, snapshot_type: &str) -> io::Result<()> {
+    api::firecrackerapi::instance_control(&vm.socket_path, VmStatus::Paused).await?;
+
+    sleep(Duration::from_micros(100)).await; // 5 minute before self destruction
+
+    api::snapshotapi::snapshot_request(&vm.socket_path, "Full", snapshot_type).await?;
+
+    api::firecrackerapi::instance_control(&vm.socket_path, VmStatus::Resume).await?;
+
+    Ok(())
+}

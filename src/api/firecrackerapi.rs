@@ -66,7 +66,6 @@ pub async fn set_boot_source(
     kernel_image_path: &str,
     boot_args: &str,
 ) -> io::Result<()> {
-    // Define the Unix socket path
 
     // Define the request body
     let body = format!(

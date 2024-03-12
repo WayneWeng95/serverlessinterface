@@ -11,10 +11,10 @@
 use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
+use tokio::time::sleep;
+use tokio::time::Duration;
 
-async fn snapshot_request(state: &str, snapshot_type: &str) -> io::Result<()> {
-    // Define the Unix socket path
-    let socket_path = "/tmp/firecracker/firecracker.socket";
+pub async fn snapshot_request(socket_path: &str, state: &str, snapshot_type: &str) -> io::Result<()> {
 
     // Define the request body
     let body = match snapshot_type {
@@ -60,11 +60,7 @@ async fn snapshot_request(state: &str, snapshot_type: &str) -> io::Result<()> {
 
     // Send the request
     stream.write_all(request.as_bytes()).await?;
-
-    // Read the response
-    let mut response = String::new();
-    stream.read_to_string(&mut response).await?;
-    println!("{}", response);
+    sleep(Duration::from_micros(300)).await; //Add a delay to avoid all the request 
 
     Ok(())
 }

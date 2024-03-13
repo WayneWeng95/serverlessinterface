@@ -4,8 +4,10 @@ use std::io;
 use std::io::prelude::*;
 use std::io::{Read, Write};
 
-pub fn chunks_cutting() -> std::io::Result<()> {
-    let mut large_file = File::open("mem_file")?;
+use uuid::Uuid;
+
+pub fn chunks_cutting(uuid: Uuid) -> std::io::Result<()> {
+    let mut large_file = File::open("mem_file")?;       //get the correct path
 
     // Create a directory to store the small files
     fs::create_dir_all("small_files")?;

@@ -13,18 +13,24 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 use tokio::time::sleep;
 use tokio::time::Duration;
+use uuid::Uuid;
 
-pub async fn snapshot_request(socket_path: &str, state: &str, snapshot_type: &str) -> io::Result<()> {
-
+pub async fn snapshot_request(
+    socket_path: &str,
+    state: &str,
+    uuid: Uuid,
+    snapshot_type: &str,
+    snapshot_path: &str,
+) -> io::Result<()> {
     // Define the request body
     let body = match snapshot_type {
         "Full" => format!(
-            r#"{{ "snapshot_type": "{}", "snapshot_path": "./snapshot_file", "mem_file_path": "./mem_file" }}"#,
-            snapshot_type
+            r#"{{ "snapshot_type": "{}", "snapshot_path": "./{}/snapshot_file_{}", "mem_file_path": "./{}/mem_file_{}" }}"#,
+            snapshot_type, snapshot_path, uuid, snapshot_path, uuid
         ),
         "Diff" => format!(
-            r#"{{ "snapshot_type": "{}", "snapshot_path": "./snapshot_file", "mem_file_path": "./mem_file" }}"#,
-            snapshot_type
+            r#"{{ "snapshot_type": "{}", "snapshot_path": "./{}/snapshot_file_{}", "mem_file_path": "./{}/mem_file_{}" }}"#,
+            snapshot_type, snapshot_path, uuid, snapshot_path, uuid
         ),
         _ => format!(r#"{{ "state": "{}" }}"#, state),
     };
@@ -60,7 +66,7 @@ pub async fn snapshot_request(socket_path: &str, state: &str, snapshot_type: &st
 
     // Send the request
     stream.write_all(request.as_bytes()).await?;
-    sleep(Duration::from_micros(300)).await; //Add a delay to avoid all the request 
+    sleep(Duration::from_micros(300)).await; //Add a delay to avoid all the request
 
     Ok(())
 }

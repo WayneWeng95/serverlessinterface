@@ -22,24 +22,37 @@ pub async fn set_up_vm(uid: i32, vm: vm::vminfo::VmSetUp) -> io::Result<()> {
 
 pub async fn start_vm(vm: vm::vminfo::VmSetUp) -> io::Result<()> {
     api::firecrackerapi::instance_control(&vm.socket_path, VmStatus::Running).await?;
-    sleep(Duration::from_secs(500)).await; // 5 minute before self destruction
+    sleep(Duration::from_secs(600)).await; // 10 minute before self destruction
     api::firecrackerapi::instance_control(&vm.socket_path, VmStatus::Terminated).await?;
 
     Ok(())
 }
 
 pub async fn end_vm(vm: vm::vminfo::VmSetUp) -> io::Result<()> {
+    //Not sure about how this end will work
     api::firecrackerapi::instance_control(&vm.socket_path, VmStatus::Terminated).await?;
 
     Ok(())
 }
 
-pub async fn snapshot_vm(vm: vm::vminfo::VmSetUp, snapshot_type: &str) -> io::Result<()> {
+pub async fn snapshot_vm(
+    vm: vm::vminfo::VmSetUp,
+    snapshot_type: &str,
+    snapshot_state: &str,
+) -> io::Result<()> {
+    //Doing the snapshot of the VM
     api::firecrackerapi::instance_control(&vm.socket_path, VmStatus::Paused).await?;
 
     sleep(Duration::from_micros(100)).await; // 5 minute before self destruction
 
-    api::snapshotapi::snapshot_request(&vm.socket_path, "Full", snapshot_type).await?;
+    api::snapshotapi::snapshot_request(
+        &vm.socket_path,
+        &snapshot_state,
+        vm.uuid,
+        snapshot_type,
+        &vm.snapshot_path,
+    )
+    .await?;
 
     api::firecrackerapi::instance_control(&vm.socket_path, VmStatus::Resume).await?;
 

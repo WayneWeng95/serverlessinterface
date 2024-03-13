@@ -66,7 +66,6 @@ pub async fn set_boot_source(
     kernel_image_path: &str,
     boot_args: &str,
 ) -> io::Result<()> {
-
     // Define the request body
     let body = format!(
         r#"{{          
@@ -172,6 +171,34 @@ async fn set_network(
 
     Ok(())
 }
+
+async fn set_machine_config(socket_path: &str) -> io::Result<()> {
+    // let body = format!();
+
+    let mut stream = UnixStream::connect(socket_path).await?;
+
+    // let request = format!();
+
+    // stream.write_all(request.as_bytes()).await?;
+    sleep(Duration::from_micros(50)).await; //Add a delay to avoid all the request sent at the same time
+
+    Ok(())
+} //the machine configuration
+
+async fn set_log_file(socket_path: &str) -> io::Result<()> {
+    // let body = format!();
+
+    let mut stream = UnixStream::connect(socket_path).await?;
+
+    // let request = format!();
+
+    // stream.write_all(request.as_bytes()).await?;
+    sleep(Duration::from_micros(50)).await; //Add a delay to avoid all the request sent at the same time
+
+    Ok(())
+} //the machine configuration
+
+
 
 use crate::vm::vminfo::VmStatus;
 pub async fn instance_control(socket_path: &str, state: VmStatus) -> io::Result<()> {

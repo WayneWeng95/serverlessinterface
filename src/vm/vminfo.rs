@@ -8,6 +8,8 @@ pub struct VmSetUp {
     pub kernel_image_path: String,
     pub boot_args: String,
     pub rootfs_path: String,
+    pub log_path: String,
+    pub snapshot_path: String,
     pub is_read_only: bool,
     pub vcpu_count: u32,
     pub mem_size_mib: u32,
@@ -26,6 +28,8 @@ impl VmSetUp {
     ) -> Self {
         // let socket_path = format!("/tmp/firecracker.socket");
         let socket_path = format!("/tmp/firecracker_{}.socket", uid);
+        let log_path = format!("/firecrackerlog/log_{}", uuid);
+        let snapshot_path = format!("/firecrackersnapshot/snapshot_{}", uuid);
         VmSetUp {
             uid,
             uuid,
@@ -33,6 +37,8 @@ impl VmSetUp {
             kernel_image_path,
             boot_args,
             rootfs_path,
+            log_path,
+            snapshot_path,
             is_read_only,
             vcpu_count,
             mem_size_mib,
@@ -42,6 +48,8 @@ impl VmSetUp {
     pub fn default_test(uid: i32, uuid: Uuid) -> Self {
         // let socket_path = format!("/tmp/firecracker.socket");
         let socket_path = format!("/tmp/firecracker_{}.socket", uid);
+        let log_path = format!("/firecrackerlog/log_{}", uuid);
+        let snapshot_path = format!("/firecrackersnapshot/snapshot_{}", uuid);
         Self {
             uid: uid,
             uuid: uuid,
@@ -50,6 +58,8 @@ impl VmSetUp {
             boot_args: "console=ttyS0 reboot=k panic=1 pci=off".to_string(),
             //rootfs_path: "/home/shared/serverlessinterface/resources/hello-rootfs.ext4".to_string(),
             rootfs_path: "/home/shared/images/ubuntu-22.04.ext4".to_string(),
+            log_path: log_path,
+            snapshot_path: snapshot_path,
             is_read_only: false,
             vcpu_count: 1,
             mem_size_mib: 128,
@@ -120,6 +130,8 @@ use std::{
     collections::LinkedList,
     sync::{Arc, Mutex},
 };
+
+use crate::api::snapshotapi;
 #[derive(Debug)] // for debug
 pub struct IpLibrary {
     pub seeds: i32,

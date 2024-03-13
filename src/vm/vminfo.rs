@@ -48,6 +48,7 @@ impl VmSetUp {
             socket_path: socket_path,
             kernel_image_path: "/home/shared/images/vmlinux-5.10.198".to_string(),
             boot_args: "console=ttyS0 reboot=k panic=1 pci=off".to_string(),
+            //rootfs_path: "/home/shared/serverlessinterface/resources/hello-rootfs.ext4".to_string(),
             rootfs_path: "/home/shared/images/ubuntu-22.04.ext4".to_string(),
             is_read_only: false,
             vcpu_count: 1,

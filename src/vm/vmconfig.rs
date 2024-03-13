@@ -22,7 +22,7 @@ pub async fn set_up_vm(uid: i32, vm: vm::vminfo::VmSetUp) -> io::Result<()> {
 
 pub async fn start_vm(vm: vm::vminfo::VmSetUp) -> io::Result<()> {
     api::firecrackerapi::instance_control(&vm.socket_path, VmStatus::Running).await?;
-    sleep(Duration::from_secs(300)).await; // 5 minute before self destruction
+    sleep(Duration::from_secs(500)).await; // 5 minute before self destruction
     api::firecrackerapi::instance_control(&vm.socket_path, VmStatus::Terminated).await?;
 
     Ok(())

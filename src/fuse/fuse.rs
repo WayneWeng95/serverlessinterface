@@ -1,4 +1,4 @@
-use fuser::{FileType, Filesystem, MountOption, ReplyAttr, Request};
+use fuser::{FileType, Filesystem, MountOption, ReplyAttr, ReplyWrite, Request};
 use std::ffi::OsStr;
 use std::time::{Duration, SystemTime};
 
@@ -85,6 +85,8 @@ impl Filesystem for MyFS {
     //     if let Ok(mut file) = OpenOptions::new().write(true).open(path) {
     //         file.seek(SeekFrom::Start(offset as u64)).unwrap();
     //         file.write_all(data).unwrap();
+
+    //         //encyption and chunkings here.
 
     //         let mut attrs = self.get_inode(inode).unwrap();
     //         attrs.last_metadata_changed = time_now();

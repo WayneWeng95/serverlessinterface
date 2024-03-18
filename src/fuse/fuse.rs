@@ -1,7 +1,9 @@
 use fuser::{FileType, Filesystem, MountOption, ReplyAttr, ReplyData, ReplyWrite, Request};
 use libc;
 use log::{debug, warn};
+use serde::{Deserialize, Serialize};
 use std::cmp::min;
+use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
@@ -9,8 +11,23 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
-use serde::{Deserialize, Serialize};
+
+use fuser::consts::FOPEN_DIRECT_IO;
+#[cfg(feature = "abi-7-26")]
+use fuser::consts::FUSE_HANDLE_KILLPRIV;
+// #[cfg(feature = "abi-7-31")]
+// use fuser::consts::FUSE_WRITE_KILL_PRIV;
+use fuser::TimeOrNow::Now;
+
+#[derive(Serialize, Deserialize, Copy, Clone, PartialEq)]
 struct MyFS;
+
+#[derive(Serialize, Deserialize, Copy, Clone, PartialEq)]
+enum FileKind {
+    File,
+    Directory,
+    Symlink,
+}
 
 const FILE_HANDLE_READ_BIT: u64 = 1 << 63;
 const FILE_HANDLE_WRITE_BIT: u64 = 1 << 62;

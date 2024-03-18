@@ -1119,6 +1119,7 @@ dependencies = [
  "md5",
  "rand",
  "reqwest",
+ "serde",
  "tokio",
  "uuid",
 ]

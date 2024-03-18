@@ -3,12 +3,35 @@ use libc;
 use log::{debug, warn};
 use std::cmp::min;
 use std::ffi::OsStr;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
+use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::FileExt;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
+use serde::{Deserialize, Serialize};
 struct MyFS;
 
 const FILE_HANDLE_READ_BIT: u64 = 1 << 63;
 const FILE_HANDLE_WRITE_BIT: u64 = 1 << 62;
+type Inode = u64;
+
+#[derive(Serialize, Deserialize)]
+struct InodeAttributes {
+    pub inode: Inode,
+    pub open_file_handles: u64, // Ref count of open file handles to this inode
+    pub size: u64,
+    pub last_accessed: (i64, u32),
+    pub last_modified: (i64, u32),
+    pub last_metadata_changed: (i64, u32),
+    pub kind: FileKind,
+    // Permissions and special mode bits
+    pub mode: u16,
+    pub hardlinks: u32,
+    pub uid: u32,
+    pub gid: u32,
+    pub xattrs: BTreeMap<Vec<u8>, Vec<u8>>,
+}
 
 impl Filesystem for MyFS {
     fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
@@ -35,7 +58,7 @@ impl Filesystem for MyFS {
     fn read(
         &mut self,
         _req: &Request,
-        inode: u64,
+        inode: Inode,
         fh: u64,
         offset: i64,
         size: u32,
@@ -70,7 +93,7 @@ impl Filesystem for MyFS {
     fn write(
         &mut self,
         _req: &Request,
-        inode: u64,
+        inode: Inode,
         fh: u64,
         offset: i64,
         data: &[u8],
@@ -128,6 +151,16 @@ impl MyFS {
         Path::new(&self.data_dir)
             .join("contents")
             .join(inode.to_string())
+    }
+    fn get_inode(&self, inode: Inode) -> Result<InodeAttributes, c_int> {
+        let path = Path::new(&self.data_dir)
+            .join("inodes")
+            .join(inode.to_string());
+        if let Ok(file) = File::open(path) {
+            Ok(bincode::deserialize_from(file).unwrap())
+        } else {
+            Err(libc::ENOENT)
+        }
     }
 }
 

@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 use tokio::time::sleep;
-use tokio::time::{timeout, Duration};
+use tokio::time::Duration;
 
 use crate::vm::vminfo::{IpLibrary, VmInfo, VmSetUp};
 use crate::vm::{network, vmconfig};

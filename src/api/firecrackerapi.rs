@@ -1,9 +1,9 @@
 use chacha20poly1305::consts::True;
-use std::io;
+use std::io::{self, Write};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 use tokio::time::sleep;
-use tokio::time::Duration;
+use tokio::time::{timeout, Duration};
 
 use crate::vm::vminfo::{IpLibrary, VmInfo, VmSetUp};
 use crate::vm::{network, vmconfig};
@@ -93,12 +93,22 @@ pub async fn set_boot_source(
 
     // Send the request
     stream.write_all(request.as_bytes()).await?;
+    println!("Boot source set successfully");
     sleep(Duration::from_micros(50)).await; //Add a delay to avoid all the request sent at the same time
 
-    // Read the response
-    let mut response = String::new();
-    stream.read_to_string(&mut response).await?; //This one appears with similiar problem?
-    println!("{}", response);
+    // let response: Result<String, std::io::Error> = timeout(Duration::from_secs(5), async {
+    //     let mut response = String::new();
+    //     stream.read_to_string(&mut response).await?;
+    //     Ok(response)
+    // })
+    // .await?;
+
+    // match response {
+    //     Ok(response) => println!("Response: {}", response),
+    //     Err(_) => println!("Response read timed out"),
+    // }
+
+    stream.shutdown().await?;
 
     Ok(())
 }
@@ -139,6 +149,20 @@ pub async fn set_rootfs(
     stream.write_all(request.as_bytes()).await?;
     sleep(Duration::from_micros(50)).await; //Add a delay to avoid all the request sent at the same time
 
+    // let response: Result<String, std::io::Error> = timeout(Duration::from_secs(5), async {
+    //     let mut response = String::new();
+    //     stream.read_to_string(&mut response).await?;
+    //     Ok(response)
+    // })
+    // .await?;
+
+    // match response {
+    //     Ok(response) => println!("Response: {}", response),
+    //     Err(_) => println!("Response read timed out"),
+    // }
+
+    stream.shutdown().await?;
+
     Ok(())
 }
 
@@ -173,6 +197,20 @@ async fn set_network(
 
     stream.write_all(request.as_bytes()).await?;
     sleep(Duration::from_micros(50)).await; //Add a delay to avoid all the request sent at the same time
+
+    // let response: Result<String, std::io::Error> = timeout(Duration::from_secs(5), async {
+    //     let mut response = String::new();
+    //     stream.read_to_string(&mut response).await?;
+    //     Ok(response)
+    // })
+    // .await?;
+
+    // match response {
+    //     Ok(response) => println!("Response: {}", response),
+    //     Err(_) => println!("Response read timed out"),
+    // }
+
+    stream.shutdown().await?;
 
     Ok(())
 }
@@ -251,6 +289,20 @@ pub async fn instance_control(socket_path: &str, state: VmStatus) -> io::Result<
 
     sleep(Duration::from_micros(50)).await; //Add a delay to avoid all the request sent at the same time
 
+    // let response: Result<String, std::io::Error> = timeout(Duration::from_secs(5), async {
+    //     let mut response = String::new();
+    //     stream.read_to_string(&mut response).await?;
+    //     Ok(response)
+    // })
+    // .await?;
+
+    // match response {
+    //     Ok(response) => println!("Response: {}", response),
+    //     Err(_) => println!("Response read timed out"),
+    // }
+
+    stream.shutdown().await?;
+
     // Read the response
     // let mut response = String::new();
     // stream.read_to_string(&mut response).await?;        //This one appears with similiar problem?
@@ -259,4 +311,53 @@ pub async fn instance_control(socket_path: &str, state: VmStatus) -> io::Result<
     Ok(())
 }
 
-pub async fn set_log() {}
+pub async fn set_log(socket_path: &str, log_path: &str) -> io::Result<()> {
+    // Construct the request body
+
+    let body = format!(
+        r#"{{
+            "log_path": "{}",
+            "level": "Debug",
+            "show_level": true,
+            "show_log_origin": true
+    }}"#,
+        log_path
+    );
+
+    // Establish a connection to the Unix domain socket
+    let mut stream = UnixStream::connect(socket_path).await?;
+
+    // Construct the HTTP request
+    let request = format!(
+        "PUT /logger HTTP/1.1\r\n\
+        Host: localhost\r\n\
+        Accept: application/json\r\n\
+        Content-Type: application/json\r\n\
+        Content-Length: {}\r\n\
+        \r\n\
+        {}",
+        body.len(),
+        body
+    );
+
+    // Send the request
+    stream.write_all(request.as_bytes()).await?;
+
+    sleep(Duration::from_micros(50)).await; //Add a delay to avoid all the request sent at the same time
+
+    // let response: Result<String, std::io::Error> = timeout(Duration::from_secs(5), async {
+    //     let mut response = String::new();
+    //     stream.read_to_string(&mut response).await?;
+    //     Ok(response)
+    // })
+    // .await?;
+
+    // match response {
+    //     Ok(response) => println!("Response: {}", response),
+    //     Err(_) => println!("Response read timed out"),
+    // }
+
+    stream.shutdown().await?;
+
+    Ok(())
+}

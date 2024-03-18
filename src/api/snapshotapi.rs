@@ -25,11 +25,11 @@ pub async fn snapshot_request(
     // Define the request body
     let body = match snapshot_type {
         "Full" => format!(
-            r#"{{ "snapshot_type": "{}", "snapshot_path": "./{}/snapshot_file_{}", "mem_file_path": "./{}/mem_file_{}" }}"#,
+            r#"{{ "snapshot_type": "{}", "snapshot_path": "./{}/snapshot_{}", "mem_file_path": "./{}/mem_file_{}" }}"#,
             snapshot_type, snapshot_path, uuid, snapshot_path, uuid
         ),
         "Diff" => format!(
-            r#"{{ "snapshot_type": "{}", "snapshot_path": "./{}/snapshot_file_{}", "mem_file_path": "./{}/mem_file_{}" }}"#,
+            r#"{{ "snapshot_type": "{}", "snapshot_path": "./{}/snapshot_{}", "mem_file_path": "./{}/mem_file_{}" }}"#,
             snapshot_type, snapshot_path, uuid, snapshot_path, uuid
         ),
         _ => format!(r#"{{ "state": "{}" }}"#, state),

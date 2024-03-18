@@ -36,6 +36,7 @@ fn metadata(
 
 fn main() {
     println!("Hello, world!");
+    // api::systemapi::remove_socket_files();
 
     let args: Vec<String> = env::args().collect();
 
@@ -53,8 +54,6 @@ fn main() {
     };
 
     let num_threads = input_variable; // Number of threads to spawn
-
-    api::systemapi::remove_socket_files();
 
     let vm_map: Arc<Mutex<HashMap<i32, vm::vminfo::VmInfo>>> = Arc::new(Mutex::new(HashMap::new()));
 

@@ -95,6 +95,11 @@ pub async fn set_boot_source(
     stream.write_all(request.as_bytes()).await?;
     sleep(Duration::from_micros(50)).await; //Add a delay to avoid all the request sent at the same time
 
+    // Read the response
+    let mut response = String::new();
+    stream.read_to_string(&mut response).await?; //This one appears with similiar problem?
+    println!("{}", response);
+
     Ok(())
 }
 
@@ -255,40 +260,3 @@ pub async fn instance_control(socket_path: &str, state: VmStatus) -> io::Result<
 }
 
 pub async fn set_log() {}
-
-use reqwest::Client;
-use serde_json::json;
-use std::error::Error;
-
-pub async fn test_reqwest() -> Result<(), Box<dyn Error>> {
-    // Specify the path to the Unix socket
-    let socket_path = "/tmp/firecracker.socket";
-    let url = format!("http+unix://{}", urlencoding::encode(socket_path));
-
-    // Create a client configured to use the Unix domain socket
-    let client = Client::builder().build()?;
-
-    // Set up the data to be sent as JSON
-    let data = json!({
-        "kernel_image_path": "/home/shared/images/vmlinux-5.10.198",
-        "boot_args": "console=ttyS0 reboot=k panic=1 pci=off"
-    });
-
-    // Perform the PUT request
-    let response = client
-        .put(format!("{}/boot-source", url))
-        .header("Accept", "application/json")
-        .header("Content-Type", "application/json")
-        .json(&data)
-        .send()
-        .await?;
-
-    // Check the response
-    if response.status().is_success() {
-        println!("Boot source set successfully.");
-    } else {
-        eprintln!("Failed to set boot source: {:?}", response.status());
-    }
-
-    Ok(())
-}

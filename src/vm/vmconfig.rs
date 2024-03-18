@@ -9,22 +9,14 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 pub async fn set_up_vm(uid: i32, vm: vm::vminfo::VmSetUp) -> io::Result<()> {
-    // match api::firecrackerapi::initialize_vm(&vm, uid).await {
-    //     Ok(_) => {
-    //         println!("VM configured successfully");
-    //         start_vm(vm).await?;
-    //     }
-    //     Err(e) => eprintln!("Error: {}", e),
-    // }
-
-    // Ok(())
-    match api::firecrackerapi::test_reqwest().await {
+    match api::firecrackerapi::initialize_vm(&vm, uid).await {
         Ok(_) => {
-            println!("reqwest test successfull");
-            // start_vm(vm).await?;
+            println!("VM configured successfully");
+            start_vm(vm).await?;
         }
         Err(e) => eprintln!("Error: {}", e),
-    };
+    }
+
     Ok(())
 }
 

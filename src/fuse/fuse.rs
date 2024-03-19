@@ -12,6 +12,7 @@ use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::os::raw::c_int;
 
 use fuser::consts::FOPEN_DIRECT_IO;
 #[cfg(feature = "abi-7-26")]
@@ -277,7 +278,6 @@ impl MyFS {
     }
 }
 
-use clap::{Arg, ArgAction, Command};
 
 fn fuse_main() {
     // let matches = Command::new("hello")
@@ -303,12 +303,25 @@ fn fuse_main() {
     //     .get_matches();
     env_logger::init();
     let mountpoint = "/home/weikang/Documents/serverlessinterface/testfolder";
-    let filesystem = MyFS;      //This is the only thing need to test
+    let data_dir = "data-dir".to_string();
+    // let filesystem = MyFS; //This is the only thing need to test
+    let mut options = vec![MountOption::FSName("fuser".to_string())];
+    options.push(MountOption::AutoUnmount);
+    let result = fuser::mount2(
+        MyFS::new(
+            data_dir,
+            true, //Direct IO means: file reads and writes go directly from the applications to the storage device, bypassing the operating system read and write caches.
+            false, // Suid means: SUID, short for Set User ID, is a special permission that can be assigned to executable files.
+        ),
+        mountpoint,
+        &options,
+    );
+
     let mut options = vec![MountOption::RW, MountOption::FSName("hello".to_string())];
 
     options.push(MountOption::AllowOther);
 
     options.push(MountOption::AutoUnmount);
 
-    fuser::mount2(filesystem, mountpoint, &options).unwrap();
+    // fuser::mount2(filesystem, mountpoint, &options).unwrap();
 }

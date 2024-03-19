@@ -10,7 +10,8 @@ use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use fuser::consts::FOPEN_DIRECT_IO;
 #[cfg(feature = "abi-7-26")]
@@ -19,18 +20,16 @@ use fuser::consts::FUSE_HANDLE_KILLPRIV;
 // use fuser::consts::FUSE_WRITE_KILL_PRIV;
 use fuser::TimeOrNow::Now;
 
-#[derive(Serialize, Deserialize, Copy, Clone, PartialEq)]
-struct MyFS;
-
-#[derive(Serialize, Deserialize, Copy, Clone, PartialEq)]
-enum FileKind {
-    File,
-    Directory,
-    Symlink,
+struct MyFS {
+    data_dir: String,
+    next_file_handle: AtomicU64,
+    direct_io: bool,
+    suid_support: bool,
 }
 
 const FILE_HANDLE_READ_BIT: u64 = 1 << 63;
 const FILE_HANDLE_WRITE_BIT: u64 = 1 << 62;
+const BLOCK_SIZE: u64 = 512;
 type Inode = u64;
 
 #[derive(Serialize, Deserialize)]
@@ -48,6 +47,79 @@ struct InodeAttributes {
     pub uid: u32,
     pub gid: u32,
     pub xattrs: BTreeMap<Vec<u8>, Vec<u8>>,
+}
+
+#[derive(Serialize, Deserialize, Copy, Clone, PartialEq)]
+enum FileKind {
+    File,
+    Directory,
+    Symlink,
+}
+
+impl From<FileKind> for fuser::FileType {
+    fn from(kind: FileKind) -> Self {
+        match kind {
+            FileKind::File => fuser::FileType::RegularFile,
+            FileKind::Directory => fuser::FileType::Directory,
+            FileKind::Symlink => fuser::FileType::Symlink,
+        }
+    }
+}
+
+impl From<InodeAttributes> for fuser::FileAttr {
+    fn from(attrs: InodeAttributes) -> Self {
+        fuser::FileAttr {
+            ino: attrs.inode,
+            size: attrs.size,
+            blocks: (attrs.size + BLOCK_SIZE - 1) / BLOCK_SIZE,
+            atime: system_time_from_time(attrs.last_accessed.0, attrs.last_accessed.1),
+            mtime: system_time_from_time(attrs.last_modified.0, attrs.last_modified.1),
+            ctime: system_time_from_time(
+                attrs.last_metadata_changed.0,
+                attrs.last_metadata_changed.1,
+            ),
+            crtime: SystemTime::UNIX_EPOCH,
+            kind: attrs.kind.into(),
+            perm: attrs.mode,
+            nlink: attrs.hardlinks,
+            uid: attrs.uid,
+            gid: attrs.gid,
+            rdev: 0,
+            blksize: BLOCK_SIZE as u32,
+            flags: 0,
+        }
+    }
+}
+
+fn time_now() -> (i64, u32) {
+    time_from_system_time(&SystemTime::now())
+}
+
+fn system_time_from_time(secs: i64, nsecs: u32) -> SystemTime {
+    if secs >= 0 {
+        UNIX_EPOCH + Duration::new(secs as u64, nsecs)
+    } else {
+        UNIX_EPOCH - Duration::new((-secs) as u64, nsecs)
+    }
+}
+
+fn time_from_system_time(system_time: &SystemTime) -> (i64, u32) {
+    // Convert to signed 64-bit time with epoch at 0
+    match system_time.duration_since(UNIX_EPOCH) {
+        Ok(duration) => (duration.as_secs() as i64, duration.subsec_nanos()),
+        Err(before_epoch_error) => (
+            -(before_epoch_error.duration().as_secs() as i64),
+            before_epoch_error.duration().subsec_nanos(),
+        ),
+    }
+}
+
+fn clear_suid_sgid(attr: &mut InodeAttributes) {
+    attr.mode &= !libc::S_ISUID as u16;
+    // SGID is only suppose to be cleared if XGRP is set
+    if attr.mode & libc::S_IXGRP as u16 != 0 {
+        attr.mode &= !libc::S_ISGID as u16;
+    }
 }
 
 impl Filesystem for MyFS {
@@ -156,6 +228,18 @@ impl Filesystem for MyFS {
 }
 
 impl MyFS {
+    fn new(
+        data_dir: String,
+        direct_io: bool,
+        #[allow(unused_variables)] suid_support: bool,
+    ) -> MyFS {
+        MyFS {
+            data_dir,
+            next_file_handle: AtomicU64::new(1),
+            direct_io,
+            suid_support: false,
+        }
+    }
     fn check_file_handle_read(&self, file_handle: u64) -> bool {
         (file_handle & FILE_HANDLE_READ_BIT) != 0
     }
@@ -178,6 +262,18 @@ impl MyFS {
         } else {
             Err(libc::ENOENT)
         }
+    }
+    fn write_inode(&self, inode: &InodeAttributes) {
+        let path = Path::new(&self.data_dir)
+            .join("inodes")
+            .join(inode.inode.to_string());
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(path)
+            .unwrap();
+        bincode::serialize_into(file, inode).unwrap();
     }
 }
 
@@ -207,7 +303,7 @@ fn fuse_main() {
     //     .get_matches();
     env_logger::init();
     let mountpoint = "/home/weikang/Documents/serverlessinterface/testfolder";
-    let filesystem = MyFS;
+    let filesystem = MyFS;      //This is the only thing need to test
     let mut options = vec![MountOption::RW, MountOption::FSName("hello".to_string())];
 
     options.push(MountOption::AllowOther);

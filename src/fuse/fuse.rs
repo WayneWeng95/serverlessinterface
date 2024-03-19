@@ -7,19 +7,12 @@ use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
+use std::os::raw::c_int;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use std::os::raw::c_int;
-
-use fuser::consts::FOPEN_DIRECT_IO;
-#[cfg(feature = "abi-7-26")]
-use fuser::consts::FUSE_HANDLE_KILLPRIV;
-// #[cfg(feature = "abi-7-31")]
-// use fuser::consts::FUSE_WRITE_KILL_PRIV;
-use fuser::TimeOrNow::Now;
 
 struct MyFS {
     data_dir: String,
@@ -277,7 +270,6 @@ impl MyFS {
         bincode::serialize_into(file, inode).unwrap();
     }
 }
-
 
 fn fuse_main() {
     // let matches = Command::new("hello")

@@ -203,12 +203,7 @@ impl Filesystem for MyFS {
             if data.len() + offset as usize > attrs.size as usize {
                 attrs.size = (data.len() + offset as usize) as u64;
             }
-            // #[cfg(feature = "abi-7-31")]
-            // if flags & FUSE_WRITE_KILL_PRIV as i32 != 0 {
-            //     clear_suid_sgid(&mut attrs);
-            // }
-            // XXX: In theory we should only need to do this when WRITE_KILL_PRIV is set for 7.31+
-            // However, xfstests fail in that case
+
             clear_suid_sgid(&mut attrs);
             self.write_inode(&attrs);
 
@@ -232,6 +227,7 @@ impl MyFS {
             next_file_handle: AtomicU64::new(1),
             direct_io,
             suid_support: false,
+            //Put a indexing data structure here
         }
     }
     fn check_file_handle_read(&self, file_handle: u64) -> bool {
@@ -261,6 +257,7 @@ impl MyFS {
         let path = Path::new(&self.data_dir)
             .join("inodes")
             .join(inode.inode.to_string());
+        //Put the chunking and indexing staff here
         let file = OpenOptions::new()
             .write(true)
             .create(true)

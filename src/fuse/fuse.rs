@@ -1,4 +1,8 @@
-use fuser::{FileType, Filesystem, MountOption, ReplyAttr, ReplyData, ReplyWrite, Request};
+use fuser::consts::FOPEN_DIRECT_IO;
+use fuser::{
+    FileType, Filesystem, KernelConfig, MountOption, ReplyAttr, ReplyCreate, ReplyData, ReplyEmpty,
+    ReplyEntry, ReplyOpen, ReplyWrite, Request, FUSE_ROOT_ID,
+};
 use libc;
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
@@ -25,8 +29,11 @@ struct MyFS {
 const FILE_HANDLE_READ_BIT: u64 = 1 << 63;
 const FILE_HANDLE_WRITE_BIT: u64 = 1 << 62;
 const BLOCK_SIZE: u64 = 512;
+const MAX_NAME_LENGTH: u32 = 255;
 const MAX_FILE_SIZE: u64 = 1024 * 1024 * 1024 * 1024; // 1 TB
 type Inode = u64;
+
+const FMODE_EXEC: i32 = 0x20;
 
 type DirectoryDescriptor = BTreeMap<Vec<u8>, (Inode, FileKind)>;
 
@@ -112,51 +119,98 @@ fn time_from_system_time(system_time: &SystemTime) -> (i64, u32) {
     }
 }
 
-fn clear_suid_sgid(attr: &mut InodeAttributes) {
-    attr.mode &= !libc::S_ISUID as u16;
-    // SGID is only suppose to be cleared if XGRP is set
-    if attr.mode & libc::S_IXGRP as u16 != 0 {
-        attr.mode &= !libc::S_ISGID as u16;
-    }
-}
+// fn clear_suid_sgid(attr: &mut InodeAttributes) {
+//     attr.mode &= !libc::S_ISUID as u16;
+//     // SGID is only suppose to be cleared if XGRP is set
+//     if attr.mode & libc::S_IXGRP as u16 != 0 {
+//         attr.mode &= !libc::S_ISGID as u16;
+//     }
+// }
 
-pub fn check_access(
-    //Could be cut
-    file_uid: u32,
-    file_gid: u32,
-    file_mode: u16,
-    uid: u32,
-    gid: u32,
-    mut access_mask: i32,
-) -> bool {
-    // F_OK tests for existence of file
-    if access_mask == libc::F_OK {
-        return true;
-    }
-    let file_mode = i32::from(file_mode);
+// pub fn check_access(
+//     //Could be cut
+//     file_uid: u32,
+//     file_gid: u32,
+//     file_mode: u16,
+//     uid: u32,
+//     gid: u32,
+//     mut access_mask: i32,
+// ) -> bool {
+//     // F_OK tests for existence of file
+//     if access_mask == libc::F_OK {
+//         return true;
+//     }
+//     let file_mode = i32::from(file_mode);
 
-    // root is allowed to read & write anything
-    if uid == 0 {
-        // root only allowed to exec if one of the X bits is set
-        access_mask &= libc::X_OK;
-        access_mask -= access_mask & (file_mode >> 6);
-        access_mask -= access_mask & (file_mode >> 3);
-        access_mask -= access_mask & file_mode;
-        return access_mask == 0;
-    }
+//     // root is allowed to read & write anything
+//     if uid == 0 {
+//         // root only allowed to exec if one of the X bits is set
+//         access_mask &= libc::X_OK;
+//         access_mask -= access_mask & (file_mode >> 6);
+//         access_mask -= access_mask & (file_mode >> 3);
+//         access_mask -= access_mask & file_mode;
+//         return access_mask == 0;
+//     }
 
-    if uid == file_uid {
-        access_mask -= access_mask & (file_mode >> 6);
-    } else if gid == file_gid {
-        access_mask -= access_mask & (file_mode >> 3);
+//     if uid == file_uid {
+//         access_mask -= access_mask & (file_mode >> 6);
+//     } else if gid == file_gid {
+//         access_mask -= access_mask & (file_mode >> 3);
+//     } else {
+//         access_mask -= access_mask & file_mode;
+//     }
+
+//     return access_mask == 0;
+// }
+
+fn as_file_kind(mut mode: u32) -> FileKind {
+    mode &= libc::S_IFMT as u32;
+
+    if mode == libc::S_IFREG as u32 {
+        return FileKind::File;
+    } else if mode == libc::S_IFLNK as u32 {
+        return FileKind::Symlink;
+    } else if mode == libc::S_IFDIR as u32 {
+        return FileKind::Directory;
     } else {
-        access_mask -= access_mask & file_mode;
+        unimplemented!("{}", mode);
     }
-
-    return access_mask == 0;
 }
 
 impl Filesystem for MyFS {
+    fn init(
+        &mut self,
+        _req: &Request,
+        #[allow(unused_variables)] config: &mut KernelConfig,
+    ) -> Result<(), c_int> {
+        // #[cfg(feature = "abi-7-26")]
+        // config.add_capabilities(FUSE_HANDLE_KILLPRIV).unwrap();
+
+        fs::create_dir_all(Path::new(&self.data_dir).join("inodes")).unwrap();
+        fs::create_dir_all(Path::new(&self.data_dir).join("contents")).unwrap();
+        if self.get_inode(FUSE_ROOT_ID).is_err() {
+            // Initialize with empty filesystem
+            let root = InodeAttributes {
+                inode: FUSE_ROOT_ID,
+                open_file_handles: 0,
+                size: 0,
+                last_accessed: time_now(),
+                last_modified: time_now(),
+                last_metadata_changed: time_now(),
+                kind: FileKind::Directory,
+                mode: 0o777,
+                hardlinks: 2,
+                uid: 0,
+                gid: 0,
+                xattrs: Default::default(),
+            };
+            self.write_inode(&root);
+            let mut entries = BTreeMap::new();
+            entries.insert(b".".to_vec(), (FUSE_ROOT_ID, FileKind::Directory));
+            self.write_directory_content(FUSE_ROOT_ID, entries);
+        }
+        Ok(())
+    }
     fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
         let attr = fuser::FileAttr {
             ino: 1,
@@ -176,6 +230,259 @@ impl Filesystem for MyFS {
             flags: 0,
         };
         reply.attr(&Duration::new(0, 0), &attr);
+    }
+
+    fn lookup(&mut self, req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
+        if name.len() > MAX_NAME_LENGTH as usize {
+            reply.error(libc::ENAMETOOLONG);
+            return;
+        }
+        let parent_attrs = self.get_inode(parent).unwrap();
+        // if !check_access(
+        //     parent_attrs.uid,
+        //     parent_attrs.gid,
+        //     parent_attrs.mode,
+        //     req.uid(),
+        //     req.gid(),
+        //     libc::X_OK,
+        // ) {
+        //     reply.error(libc::EACCES);
+        //     return;
+        // }
+
+        match self.lookup_name(parent, name) {
+            Ok(attrs) => reply.entry(&Duration::new(0, 0), &attrs.into(), 0),
+            Err(error_code) => reply.error(error_code),
+        }
+    }
+
+    fn forget(&mut self, _req: &Request, _ino: u64, _nlookup: u64) {}
+
+    // fn getattr(&mut self, _req: &Request, inode: u64, reply: ReplyAttr) {
+    //     match self.get_inode(inode) {
+    //         Ok(attrs) => reply.attr(&Duration::new(0, 0), &attrs.into()),
+    //         Err(error_code) => reply.error(error_code),
+    //     }
+    // }
+
+    // fn setattr(
+    //     &mut self,
+    //     req: &Request,
+    //     inode: u64,
+    //     mode: Option<u32>,
+    //     uid: Option<u32>,
+    //     gid: Option<u32>,
+    //     size: Option<u64>,
+    //     atime: Option<TimeOrNow>,
+    //     mtime: Option<TimeOrNow>,
+    //     _ctime: Option<SystemTime>,
+    //     fh: Option<u64>,
+    //     _crtime: Option<SystemTime>,
+    //     _chgtime: Option<SystemTime>,
+    //     _bkuptime: Option<SystemTime>,
+    //     _flags: Option<u32>,
+    //     reply: ReplyAttr,
+    // ) {
+    //     let mut attrs = match self.get_inode(inode) {
+    //         Ok(attrs) => attrs,
+    //         Err(error_code) => {
+    //             reply.error(error_code);
+    //             return;
+    //         }
+    //     };
+
+    //     if let Some(mode) = mode {
+    //         debug!("chmod() called with {:?}, {:o}", inode, mode);
+    //         if req.uid() != 0 && req.uid() != attrs.uid {
+    //             reply.error(libc::EPERM);
+    //             return;
+    //         }
+    //         if req.uid() != 0
+    //             && req.gid() != attrs.gid
+    //             && !get_groups(req.pid()).contains(&attrs.gid)
+    //         {
+    //             // If SGID is set and the file belongs to a group that the caller is not part of
+    //             // then the SGID bit is suppose to be cleared during chmod
+    //             attrs.mode = (mode & !libc::S_ISGID as u32) as u16;
+    //         } else {
+    //             attrs.mode = mode as u16;
+    //         }
+    //         attrs.last_metadata_changed = time_now();
+    //         self.write_inode(&attrs);
+    //         reply.attr(&Duration::new(0, 0), &attrs.into());
+    //         return;
+    //     }
+
+    //     if uid.is_some() || gid.is_some() {
+    //         debug!("chown() called with {:?} {:?} {:?}", inode, uid, gid);
+    //         if let Some(gid) = gid {
+    //             // Non-root users can only change gid to a group they're in
+    //             if req.uid() != 0 && !get_groups(req.pid()).contains(&gid) {
+    //                 reply.error(libc::EPERM);
+    //                 return;
+    //             }
+    //         }
+    //         if let Some(uid) = uid {
+    //             if req.uid() != 0
+    //                 // but no-op changes by the owner are not an error
+    //                 && !(uid == attrs.uid && req.uid() == attrs.uid)
+    //             {
+    //                 reply.error(libc::EPERM);
+    //                 return;
+    //             }
+    //         }
+    //         // Only owner may change the group
+    //         if gid.is_some() && req.uid() != 0 && req.uid() != attrs.uid {
+    //             reply.error(libc::EPERM);
+    //             return;
+    //         }
+
+    //         if attrs.mode & (libc::S_IXUSR | libc::S_IXGRP | libc::S_IXOTH) as u16 != 0 {
+    //             // SUID & SGID are suppose to be cleared when chown'ing an executable file
+    //             clear_suid_sgid(&mut attrs);
+    //         }
+
+    //         if let Some(uid) = uid {
+    //             attrs.uid = uid;
+    //             // Clear SETUID on owner change
+    //             attrs.mode &= !libc::S_ISUID as u16;
+    //         }
+    //         if let Some(gid) = gid {
+    //             attrs.gid = gid;
+    //             // Clear SETGID unless user is root
+    //             if req.uid() != 0 {
+    //                 attrs.mode &= !libc::S_ISGID as u16;
+    //             }
+    //         }
+    //         attrs.last_metadata_changed = time_now();
+    //         self.write_inode(&attrs);
+    //         reply.attr(&Duration::new(0, 0), &attrs.into());
+    //         return;
+    //     }
+
+    //     if let Some(size) = size {
+    //         debug!("truncate() called with {:?} {:?}", inode, size);
+    //         if let Some(handle) = fh {
+    //             // If the file handle is available, check access locally.
+    //             // This is important as it preserves the semantic that a file handle opened
+    //             // with W_OK will never fail to truncate, even if the file has been subsequently
+    //             // chmod'ed
+    //             if self.check_file_handle_write(handle) {
+    //                 if let Err(error_code) = self.truncate(inode, size, 0, 0) {
+    //                     reply.error(error_code);
+    //                     return;
+    //                 }
+    //             } else {
+    //                 reply.error(libc::EACCES);
+    //                 return;
+    //             }
+    //         } else if let Err(error_code) = self.truncate(inode, size, req.uid(), req.gid()) {
+    //             reply.error(error_code);
+    //             return;
+    //         }
+    //     }
+
+    //     let now = time_now();
+    //     if let Some(atime) = atime {
+    //         debug!("utimens() called with {:?}, atime={:?}", inode, atime);
+
+    //         if attrs.uid != req.uid() && req.uid() != 0 && atime != Now {
+    //             reply.error(libc::EPERM);
+    //             return;
+    //         }
+
+    //         if attrs.uid != req.uid()
+    //             && !check_access(
+    //                 attrs.uid,
+    //                 attrs.gid,
+    //                 attrs.mode,
+    //                 req.uid(),
+    //                 req.gid(),
+    //                 libc::W_OK,
+    //             )
+    //         {
+    //             reply.error(libc::EACCES);
+    //             return;
+    //         }
+
+    //         attrs.last_accessed = match atime {
+    //             TimeOrNow::SpecificTime(time) => time_from_system_time(&time),
+    //             Now => now,
+    //         };
+    //         attrs.last_metadata_changed = now;
+    //         self.write_inode(&attrs);
+    //     }
+    //     if let Some(mtime) = mtime {
+    //         debug!("utimens() called with {:?}, mtime={:?}", inode, mtime);
+
+    //         if attrs.uid != req.uid() && req.uid() != 0 && mtime != Now {
+    //             reply.error(libc::EPERM);
+    //             return;
+    //         }
+
+    //         if attrs.uid != req.uid()
+    //             && !check_access(
+    //                 attrs.uid,
+    //                 attrs.gid,
+    //                 attrs.mode,
+    //                 req.uid(),
+    //                 req.gid(),
+    //                 libc::W_OK,
+    //             )
+    //         {
+    //             reply.error(libc::EACCES);
+    //             return;
+    //         }
+
+    //         attrs.last_modified = match mtime {
+    //             TimeOrNow::SpecificTime(time) => time_from_system_time(&time),
+    //             Now => now,
+    //         };
+    //         attrs.last_metadata_changed = now;
+    //         self.write_inode(&attrs);
+    //     }
+
+    //     let attrs = self.get_inode(inode).unwrap();
+    //     reply.attr(&Duration::new(0, 0), &attrs.into());
+    //     return;
+    // }
+
+    fn open(&mut self, req: &Request, inode: u64, flags: i32, reply: ReplyOpen) {
+        debug!("open() called for {:?}", inode);
+        let (access_mask, read, write) = match flags & libc::O_ACCMODE {
+            libc::O_RDONLY => {
+                // Behavior is undefined, but most filesystems return EACCES
+                if flags & libc::O_TRUNC != 0 {
+                    reply.error(libc::EACCES);
+                    return;
+                }
+                if flags & FMODE_EXEC != 0 {
+                    // Open is from internal exec syscall
+                    (libc::X_OK, true, false)
+                } else {
+                    (libc::R_OK, true, false)
+                }
+            }
+            libc::O_WRONLY => (libc::W_OK, false, true),
+            libc::O_RDWR => (libc::R_OK | libc::W_OK, true, true),
+            // Exactly one access mode flag must be specified
+            _ => {
+                reply.error(libc::EINVAL);
+                return;
+            }
+        };
+
+        match self.get_inode(inode) {
+            Ok(mut attr) => {
+                attr.open_file_handles += 1;
+                self.write_inode(&attr);
+                let open_flags = if self.direct_io { FOPEN_DIRECT_IO } else { 0 };
+                reply.opened(self.allocate_next_file_handle(read, write), open_flags);
+
+                return;
+            }
+            Err(error_code) => reply.error(error_code),
+        }
     }
 
     fn read(
@@ -244,7 +551,7 @@ impl Filesystem for MyFS {
                 attrs.size = (data.len() + offset as usize) as u64;
             }
 
-            clear_suid_sgid(&mut attrs);
+            // clear_suid_sgid(&mut attrs);
             self.write_inode(&attrs);
 
             reply.written(data.len() as u32);
@@ -253,6 +560,212 @@ impl Filesystem for MyFS {
         }
     }
 
+    fn release(
+        &mut self,
+        _req: &Request<'_>,
+        inode: u64,
+        _fh: u64,
+        _flags: i32,
+        _lock_owner: Option<u64>,
+        _flush: bool,
+        reply: ReplyEmpty,
+    ) {
+        if let Ok(mut attrs) = self.get_inode(inode) {
+            attrs.open_file_handles -= 1;
+        }
+        reply.ok();
+    }
+
+    fn access(&mut self, req: &Request, inode: u64, mask: i32, reply: ReplyEmpty) {
+        debug!("access() called with {:?} {:?}", inode, mask);
+        match self.get_inode(inode) {
+            Ok(attr) => {
+                reply.ok();
+            }
+            Err(error_code) => reply.error(error_code),
+        }
+    }
+
+    fn create(
+        &mut self,
+        req: &Request,
+        parent: u64,
+        name: &OsStr,
+        mut mode: u32,
+        _umask: u32,
+        flags: i32,
+        reply: ReplyCreate,
+    ) {
+        debug!("create() called with {:?} {:?}", parent, name);
+        if self.lookup_name(parent, name).is_ok() {
+            reply.error(libc::EEXIST);
+            return;
+        }
+
+        let (read, write) = match flags & libc::O_ACCMODE {
+            libc::O_RDONLY => (true, false),
+            libc::O_WRONLY => (false, true),
+            libc::O_RDWR => (true, true),
+            // Exactly one access mode flag must be specified
+            _ => {
+                reply.error(libc::EINVAL);
+                return;
+            }
+        };
+
+        let mut parent_attrs = match self.get_inode(parent) {
+            Ok(attrs) => attrs,
+            Err(error_code) => {
+                reply.error(error_code);
+                return;
+            }
+        };
+
+        // if !check_access(
+        //     parent_attrs.uid,
+        //     parent_attrs.gid,
+        //     parent_attrs.mode,
+        //     req.uid(),
+        //     req.gid(),
+        //     libc::W_OK,
+        // ) {
+        //     reply.error(libc::EACCES);
+        //     return;
+        // }
+        parent_attrs.last_modified = time_now();
+        parent_attrs.last_metadata_changed = time_now();
+        self.write_inode(&parent_attrs);
+
+        if req.uid() != 0 {
+            mode &= !(libc::S_ISUID | libc::S_ISGID) as u32;
+        }
+
+        let inode = self.allocate_next_inode();
+        let attrs = InodeAttributes {
+            inode,
+            open_file_handles: 1,
+            size: 0,
+            last_accessed: time_now(),
+            last_modified: time_now(),
+            last_metadata_changed: time_now(),
+            kind: as_file_kind(mode),
+            mode: 0o777,//self.creation_mode(mode),
+            hardlinks: 1,
+            uid: 0,//req.uid(),
+            gid: 0,//creation_gid(&parent_attrs, req.gid()),
+            xattrs: Default::default(),
+        };
+        self.write_inode(&attrs);
+        File::create(self.content_path(inode)).unwrap();
+
+        // if as_file_kind(mode) == FileKind::Directory {
+        //     let mut entries = BTreeMap::new();
+        //     entries.insert(b".".to_vec(), (inode, FileKind::Directory));
+        //     entries.insert(b"..".to_vec(), (parent, FileKind::Directory));
+        //     self.write_directory_content(inode, entries);
+        // }
+
+        let mut entries = self.get_directory_content(parent).unwrap();
+        entries.insert(name.as_bytes().to_vec(), (inode, attrs.kind));
+        self.write_directory_content(parent, entries);
+
+        // TODO: implement flags
+        reply.created(
+            &Duration::new(0, 0),
+            &attrs.into(),
+            0,
+            self.allocate_next_file_handle(read, write),
+            0,
+        );
+    }
+
+    // #[cfg(target_os = "linux")]
+    // fn fallocate(
+    //     &mut self,
+    //     _req: &Request<'_>,
+    //     inode: u64,
+    //     _fh: u64,
+    //     offset: i64,
+    //     length: i64,
+    //     mode: i32,
+    //     reply: ReplyEmpty,
+    // ) {
+    //     let path = self.content_path(inode);
+    //     if let Ok(file) = OpenOptions::new().write(true).open(path) {
+    //         unsafe {
+    //             libc::fallocate64(file.into_raw_fd(), mode, offset, length);
+    //         }
+    //         if mode & libc::FALLOC_FL_KEEP_SIZE == 0 {
+    //             let mut attrs = self.get_inode(inode).unwrap();
+    //             attrs.last_metadata_changed = time_now();
+    //             attrs.last_modified = time_now();
+    //             if (offset + length) as u64 > attrs.size {
+    //                 attrs.size = (offset + length) as u64;
+    //             }
+    //             self.write_inode(&attrs);
+    //         }
+    //         reply.ok();
+    //     } else {
+    //         reply.error(libc::ENOENT);
+    //     }
+    // }
+
+    fn copy_file_range(
+        &mut self,
+        _req: &Request<'_>,
+        src_inode: u64,
+        src_fh: u64,
+        src_offset: i64,
+        dest_inode: u64,
+        dest_fh: u64,
+        dest_offset: i64,
+        size: u64,
+        _flags: u32,
+        reply: ReplyWrite,
+    ) {
+        debug!(
+            "copy_file_range() called with src ({}, {}, {}) dest ({}, {}, {}) size={}",
+            src_fh, src_inode, src_offset, dest_fh, dest_inode, dest_offset, size
+        );
+        if !self.check_file_handle_read(src_fh) {
+            reply.error(libc::EACCES);
+            return;
+        }
+        if !self.check_file_handle_write(dest_fh) {
+            reply.error(libc::EACCES);
+            return;
+        }
+
+        let src_path = self.content_path(src_inode);
+        if let Ok(file) = File::open(src_path) {
+            let file_size = file.metadata().unwrap().len();
+            // Could underflow if file length is less than local_start
+            let read_size = min(size, file_size.saturating_sub(src_offset as u64));
+
+            let mut data = vec![0; read_size as usize];
+            file.read_exact_at(&mut data, src_offset as u64).unwrap();
+
+            let dest_path = self.content_path(dest_inode);
+            if let Ok(mut file) = OpenOptions::new().write(true).open(dest_path) {
+                file.seek(SeekFrom::Start(dest_offset as u64)).unwrap();
+                file.write_all(&data).unwrap();
+
+                let mut attrs = self.get_inode(dest_inode).unwrap();
+                attrs.last_metadata_changed = time_now();
+                attrs.last_modified = time_now();
+                if data.len() + dest_offset as usize > attrs.size as usize {
+                    attrs.size = (data.len() + dest_offset as usize) as u64;
+                }
+                self.write_inode(&attrs);
+
+                reply.written(data.len() as u32);
+            } else {
+                reply.error(libc::EBADF);
+            }
+        } else {
+            reply.error(libc::ENOENT);
+        }
+    }
     // Implement other filesystem methods as needed
 }
 
@@ -290,6 +803,28 @@ impl MyFS {
         current_inode + 1
     }
 
+    fn allocate_next_file_handle(&self, read: bool, write: bool) -> u64 {
+        let mut fh = self.next_file_handle.fetch_add(1, Ordering::SeqCst);
+        // Assert that we haven't run out of file handles
+        assert!(fh < FILE_HANDLE_READ_BIT.min(FILE_HANDLE_WRITE_BIT));
+        if read {
+            fh |= FILE_HANDLE_READ_BIT;
+        }
+        if write {
+            fh |= FILE_HANDLE_WRITE_BIT;
+        }
+
+        fh
+    }
+
+    fn check_file_handle_read(&self, file_handle: u64) -> bool {
+        (file_handle & FILE_HANDLE_READ_BIT) != 0
+    }
+
+    fn check_file_handle_write(&self, file_handle: u64) -> bool {
+        (file_handle & FILE_HANDLE_WRITE_BIT) != 0
+    }
+
     fn content_path(&self, inode: Inode) -> PathBuf {
         Path::new(&self.data_dir)
             .join("contents")
@@ -318,20 +853,6 @@ impl MyFS {
             .open(path)
             .unwrap();
         bincode::serialize_into(file, &entries).unwrap();
-    }
-
-    fn allocate_next_file_handle(&self, read: bool, write: bool) -> u64 {
-        let mut fh = self.next_file_handle.fetch_add(1, Ordering::SeqCst);
-        // Assert that we haven't run out of file handles
-        assert!(fh < FILE_HANDLE_READ_BIT.min(FILE_HANDLE_WRITE_BIT));
-        if read {
-            fh |= FILE_HANDLE_READ_BIT;
-        }
-        if write {
-            fh |= FILE_HANDLE_WRITE_BIT;
-        }
-
-        fh
     }
 
     fn get_inode(&self, inode: Inode) -> Result<InodeAttributes, c_int> {
@@ -378,13 +899,6 @@ impl MyFS {
         return false;
     }
 
-    fn check_file_handle_read(&self, file_handle: u64) -> bool {
-        (file_handle & FILE_HANDLE_READ_BIT) != 0
-    }
-
-    fn check_file_handle_write(&self, file_handle: u64) -> bool {
-        (file_handle & FILE_HANDLE_WRITE_BIT) != 0
-    }
     fn truncate(
         &self,
         inode: Inode,
@@ -398,9 +912,9 @@ impl MyFS {
 
         let mut attrs = self.get_inode(inode)?;
 
-        if !check_access(attrs.uid, attrs.gid, attrs.mode, uid, gid, libc::W_OK) {
-            return Err(libc::EACCES);
-        }
+        // if !check_access(attrs.uid, attrs.gid, attrs.mode, uid, gid, libc::W_OK) {
+        //     return Err(libc::EACCES);
+        // }
 
         let path = self.content_path(inode);
         let file = OpenOptions::new().write(true).open(path).unwrap();
@@ -411,7 +925,7 @@ impl MyFS {
         attrs.last_modified = time_now();
 
         // Clear SETUID & SETGID on truncate
-        clear_suid_sgid(&mut attrs);
+        // clear_suid_sgid(&mut attrs);
 
         self.write_inode(&attrs);
 

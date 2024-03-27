@@ -25,7 +25,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, fs, io};
 
-const BLOCK_SIZE: u64 = 1024;
+const BLOCK_SIZE: u64 = 512;
 const MAX_NAME_LENGTH: u32 = 255;
 const MAX_FILE_SIZE: u64 = 1024 * 1024 * 1024 * 1024;
 
@@ -995,75 +995,75 @@ impl Filesystem for VmFuse {
         reply.ok();
     }
 
-    fn symlink(
-        &mut self,
-        req: &Request,
-        parent: u64,
-        link_name: &OsStr,
-        target: &Path,
-        reply: ReplyEntry,
-    ) {
-        debug!(
-            "symlink() called with {:?} {:?} {:?}",
-            parent, link_name, target
-        );
-        let mut parent_attrs = match self.get_inode(parent) {
-            Ok(attrs) => attrs,
-            Err(error_code) => {
-                reply.error(error_code);
-                return;
-            }
-        };
+    // fn symlink(
+    //     &mut self,
+    //     req: &Request,
+    //     parent: u64,
+    //     link_name: &OsStr,
+    //     target: &Path,
+    //     reply: ReplyEntry,
+    // ) {
+    //     debug!(
+    //         "symlink() called with {:?} {:?} {:?}",
+    //         parent, link_name, target
+    //     );
+    //     let mut parent_attrs = match self.get_inode(parent) {
+    //         Ok(attrs) => attrs,
+    //         Err(error_code) => {
+    //             reply.error(error_code);
+    //             return;
+    //         }
+    //     };
 
-        if !check_access(
-            parent_attrs.uid,
-            parent_attrs.gid,
-            parent_attrs.mode,
-            req.uid(),
-            req.gid(),
-            libc::W_OK,
-        ) {
-            reply.error(libc::EACCES);
-            return;
-        }
-        parent_attrs.last_modified = time_now();
-        parent_attrs.last_metadata_changed = time_now();
-        self.write_inode(&parent_attrs);
+    //     if !check_access(
+    //         parent_attrs.uid,
+    //         parent_attrs.gid,
+    //         parent_attrs.mode,
+    //         req.uid(),
+    //         req.gid(),
+    //         libc::W_OK,
+    //     ) {
+    //         reply.error(libc::EACCES);
+    //         return;
+    //     }
+    //     parent_attrs.last_modified = time_now();
+    //     parent_attrs.last_metadata_changed = time_now();
+    //     self.write_inode(&parent_attrs);
 
-        let inode = self.allocate_next_inode();
-        let attrs = InodeAttributes {
-            inode,
-            open_file_handles: 0,
-            size: target.as_os_str().as_bytes().len() as u64,
-            last_accessed: time_now(),
-            last_modified: time_now(),
-            last_metadata_changed: time_now(),
-            kind: FileKind::Symlink,
-            mode: 0o777,
-            hardlinks: 1,
-            uid: req.uid(),
-            gid: creation_gid(&parent_attrs, req.gid()),
-            xattrs: Default::default(),
-        };
+    //     let inode = self.allocate_next_inode();
+    //     let attrs = InodeAttributes {
+    //         inode,
+    //         open_file_handles: 0,
+    //         size: target.as_os_str().as_bytes().len() as u64,
+    //         last_accessed: time_now(),
+    //         last_modified: time_now(),
+    //         last_metadata_changed: time_now(),
+    //         kind: FileKind::Symlink,
+    //         mode: 0o777,
+    //         hardlinks: 1,
+    //         uid: req.uid(),
+    //         gid: creation_gid(&parent_attrs, req.gid()),
+    //         xattrs: Default::default(),
+    //     };
 
-        if let Err(error_code) = self.insert_link(req, parent, link_name, inode, FileKind::Symlink)
-        {
-            reply.error(error_code);
-            return;
-        }
-        self.write_inode(&attrs);
+    //     if let Err(error_code) = self.insert_link(req, parent, link_name, inode, FileKind::Symlink)
+    //     {
+    //         reply.error(error_code);
+    //         return;
+    //     }
+    //     self.write_inode(&attrs);
 
-        let path = self.content_path(inode);
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(path)
-            .unwrap();
-        file.write_all(target.as_os_str().as_bytes()).unwrap();
+    //     let path = self.content_path(inode);
+    //     let mut file = OpenOptions::new()
+    //         .write(true)
+    //         .create(true)
+    //         .truncate(true)
+    //         .open(path)
+    //         .unwrap();
+    //     file.write_all(target.as_os_str().as_bytes()).unwrap();
 
-        reply.entry(&Duration::new(0, 0), &attrs.into(), 0);
-    }
+    //     reply.entry(&Duration::new(0, 0), &attrs.into(), 0);
+    // }
 
     fn rename(
         &mut self,
@@ -2005,7 +2005,8 @@ pub fn fuse_main() {
     // let filesystem = VmFuse; //This is the only thing need to test
     let mut options = vec![MountOption::FSName("fuser".to_string())];
     options.push(MountOption::AutoUnmount);
-    // options.push(MountOption::CUSTOM(()));
+    // options.push(MountOption::CUSTOM(("max_read=1048576").to_string()));
+    // options.push(MountOption::CUSTOM(("max_write=262144").to_string()));
     let result = fuser::mount2(
         VmFuse::new(
             data_dir,

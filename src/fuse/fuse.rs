@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::min;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
+use std::fs;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::os::raw::c_int;
@@ -24,7 +25,10 @@ struct MyFS {
 const FILE_HANDLE_READ_BIT: u64 = 1 << 63;
 const FILE_HANDLE_WRITE_BIT: u64 = 1 << 62;
 const BLOCK_SIZE: u64 = 512;
+const MAX_FILE_SIZE: u64 = 1024 * 1024 * 1024 * 1024; // 1 TB
 type Inode = u64;
+
+type DirectoryDescriptor = BTreeMap<Vec<u8>, (Inode, FileKind)>;
 
 #[derive(Serialize, Deserialize)]
 struct InodeAttributes {
@@ -114,6 +118,42 @@ fn clear_suid_sgid(attr: &mut InodeAttributes) {
     if attr.mode & libc::S_IXGRP as u16 != 0 {
         attr.mode &= !libc::S_ISGID as u16;
     }
+}
+
+pub fn check_access(
+    //Could be cut
+    file_uid: u32,
+    file_gid: u32,
+    file_mode: u16,
+    uid: u32,
+    gid: u32,
+    mut access_mask: i32,
+) -> bool {
+    // F_OK tests for existence of file
+    if access_mask == libc::F_OK {
+        return true;
+    }
+    let file_mode = i32::from(file_mode);
+
+    // root is allowed to read & write anything
+    if uid == 0 {
+        // root only allowed to exec if one of the X bits is set
+        access_mask &= libc::X_OK;
+        access_mask -= access_mask & (file_mode >> 6);
+        access_mask -= access_mask & (file_mode >> 3);
+        access_mask -= access_mask & file_mode;
+        return access_mask == 0;
+    }
+
+    if uid == file_uid {
+        access_mask -= access_mask & (file_mode >> 6);
+    } else if gid == file_gid {
+        access_mask -= access_mask & (file_mode >> 3);
+    } else {
+        access_mask -= access_mask & file_mode;
+    }
+
+    return access_mask == 0;
 }
 
 impl Filesystem for MyFS {
@@ -230,12 +270,24 @@ impl MyFS {
             //Put a indexing data structure here
         }
     }
-    fn check_file_handle_read(&self, file_handle: u64) -> bool {
-        (file_handle & FILE_HANDLE_READ_BIT) != 0
-    }
 
-    fn check_file_handle_write(&self, file_handle: u64) -> bool {
-        (file_handle & FILE_HANDLE_WRITE_BIT) != 0
+    fn allocate_next_inode(&self) -> Inode {
+        let path = Path::new(&self.data_dir).join("superblock");
+        let current_inode = if let Ok(file) = File::open(&path) {
+            bincode::deserialize_from(file).unwrap()
+        } else {
+            fuser::FUSE_ROOT_ID
+        };
+
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)
+            .unwrap();
+        bincode::serialize_into(file, &(current_inode + 1)).unwrap();
+
+        current_inode + 1
     }
 
     fn content_path(&self, inode: Inode) -> PathBuf {
@@ -243,6 +295,45 @@ impl MyFS {
             .join("contents")
             .join(inode.to_string())
     }
+
+    fn get_directory_content(&self, inode: Inode) -> Result<DirectoryDescriptor, c_int> {
+        let path = Path::new(&self.data_dir)
+            .join("contents")
+            .join(inode.to_string());
+        if let Ok(file) = File::open(path) {
+            Ok(bincode::deserialize_from(file).unwrap())
+        } else {
+            Err(libc::ENOENT)
+        }
+    }
+
+    fn write_directory_content(&self, inode: Inode, entries: DirectoryDescriptor) {
+        let path = Path::new(&self.data_dir)
+            .join("contents")
+            .join(inode.to_string());
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(path)
+            .unwrap();
+        bincode::serialize_into(file, &entries).unwrap();
+    }
+
+    fn allocate_next_file_handle(&self, read: bool, write: bool) -> u64 {
+        let mut fh = self.next_file_handle.fetch_add(1, Ordering::SeqCst);
+        // Assert that we haven't run out of file handles
+        assert!(fh < FILE_HANDLE_READ_BIT.min(FILE_HANDLE_WRITE_BIT));
+        if read {
+            fh |= FILE_HANDLE_READ_BIT;
+        }
+        if write {
+            fh |= FILE_HANDLE_WRITE_BIT;
+        }
+
+        fh
+    }
+
     fn get_inode(&self, inode: Inode) -> Result<InodeAttributes, c_int> {
         let path = Path::new(&self.data_dir)
             .join("inodes")
@@ -253,6 +344,7 @@ impl MyFS {
             Err(libc::ENOENT)
         }
     }
+
     fn write_inode(&self, inode: &InodeAttributes) {
         let path = Path::new(&self.data_dir)
             .join("inodes")
@@ -266,9 +358,76 @@ impl MyFS {
             .unwrap();
         bincode::serialize_into(file, inode).unwrap();
     }
+
+    // Check whether a file should be removed from storage. Should be called after decrementing
+    // the link count, or closing a file handle
+    fn gc_inode(&self, inode: &InodeAttributes) -> bool {
+        if inode.hardlinks == 0 && inode.open_file_handles == 0 {
+            let inode_path = Path::new(&self.data_dir)
+                .join("inodes")
+                .join(inode.inode.to_string());
+            fs::remove_file(inode_path).unwrap();
+            let content_path = Path::new(&self.data_dir)
+                .join("contents")
+                .join(inode.inode.to_string());
+            fs::remove_file(content_path).unwrap();
+
+            return true;
+        }
+
+        return false;
+    }
+
+    fn check_file_handle_read(&self, file_handle: u64) -> bool {
+        (file_handle & FILE_HANDLE_READ_BIT) != 0
+    }
+
+    fn check_file_handle_write(&self, file_handle: u64) -> bool {
+        (file_handle & FILE_HANDLE_WRITE_BIT) != 0
+    }
+    fn truncate(
+        &self,
+        inode: Inode,
+        new_length: u64,
+        uid: u32,
+        gid: u32,
+    ) -> Result<InodeAttributes, c_int> {
+        if new_length > MAX_FILE_SIZE {
+            return Err(libc::EFBIG);
+        }
+
+        let mut attrs = self.get_inode(inode)?;
+
+        if !check_access(attrs.uid, attrs.gid, attrs.mode, uid, gid, libc::W_OK) {
+            return Err(libc::EACCES);
+        }
+
+        let path = self.content_path(inode);
+        let file = OpenOptions::new().write(true).open(path).unwrap();
+        file.set_len(new_length).unwrap();
+
+        attrs.size = new_length;
+        attrs.last_metadata_changed = time_now();
+        attrs.last_modified = time_now();
+
+        // Clear SETUID & SETGID on truncate
+        clear_suid_sgid(&mut attrs);
+
+        self.write_inode(&attrs);
+
+        Ok(attrs)
+    }
+    fn lookup_name(&self, parent: u64, name: &OsStr) -> Result<InodeAttributes, c_int> {
+        let entries = self.get_directory_content(parent)?;
+        if let Some((inode, _)) = entries.get(name.as_bytes()) {
+            return self.get_inode(*inode);
+        } else {
+            return Err(libc::ENOENT);
+        }
+    }
 }
 
-fn fuse_main() {
+pub fn fuse_main() {
     // let matches = Command::new("hello")
     //     .author("Christopher Berner")
     //     .arg(

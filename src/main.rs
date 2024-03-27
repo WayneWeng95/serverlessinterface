@@ -3,6 +3,7 @@ mod fuse;
 mod security;
 mod vm;
 
+use crate::fuse::fuse::fuse_main;
 use crate::vm::network;
 use std::collections::HashMap;
 use std::env;
@@ -38,46 +39,46 @@ fn main() {
     println!("Hello, world!");
     // api::systemapi::remove_socket_files();
 
-    let args: Vec<String> = env::args().collect();
+    // let args: Vec<String> = env::args().collect();
 
-    if args.len() < 2 {
-        println!("Usage: cargo run -- <input_variable>");
-        return;
-    }
+    // if args.len() < 2 {
+    //     println!("Usage: cargo run -- <input_variable>");
+    //     return;
+    // }
 
-    let input_variable: i32 = match args[1].parse() {
-        Ok(num) => num,
-        Err(_) => {
-            println!("Input variable must be an integer");
-            return;
-        }
-    };
+    // let input_variable: i32 = match args[1].parse() {
+    //     Ok(num) => num,
+    //     Err(_) => {
+    //         println!("Input variable must be an integer");
+    //         return;
+    //     }
+    // };
 
-    let num_threads = input_variable; // Number of threads to spawn
+    // let num_threads = input_variable; // Number of threads to spawn
 
-    let vm_map: Arc<Mutex<HashMap<i32, vm::vminfo::VmInfo>>> = Arc::new(Mutex::new(HashMap::new()));
+    // let vm_map: Arc<Mutex<HashMap<i32, vm::vminfo::VmInfo>>> = Arc::new(Mutex::new(HashMap::new()));
 
-    let iplibrary = Arc::new(Mutex::new(vm::vminfo::IpLibrary::new()));
+    // let iplibrary = Arc::new(Mutex::new(vm::vminfo::IpLibrary::new()));
 
-    // let num_threads = 5; // Number of threads to spawn
+    // // let num_threads = 5; // Number of threads to spawn
 
-    let handles: Vec<_> = (0..num_threads)
-        .map(|_| {
-            let iplibrary_clone = Arc::clone(&iplibrary);
-            let vm_map_clone = Arc::clone(&vm_map);
+    // let handles: Vec<_> = (0..num_threads)
+    //     .map(|_| {
+    //         let iplibrary_clone = Arc::clone(&iplibrary);
+    //         let vm_map_clone = Arc::clone(&vm_map);
 
-            thread::spawn(move || {
-                let (uid, vm) = metadata(Arc::clone(&iplibrary_clone), Arc::clone(&vm_map_clone));
-                api::systemapi::start_firecracker(vm.socket_path.clone());
-                async_main(uid, vm);
-            })
-        })
-        .collect();
+    //         thread::spawn(move || {
+    //             let (uid, vm) = metadata(Arc::clone(&iplibrary_clone), Arc::clone(&vm_map_clone));
+    //             api::systemapi::start_firecracker(vm.socket_path.clone());
+    //             async_main(uid, vm);
+    //         })
+    //     })
+    //     .collect();
 
-    // Wait for all threads to finish
-    for handle in handles {
-        handle.join().unwrap();
-    }
+    // // Wait for all threads to finish
+    // for handle in handles {
+    //     handle.join().unwrap();
+    // }
 
     // let mut iplibrary = vm::vminfo::IpLibrary::new();
 
@@ -95,14 +96,12 @@ fn main() {
 
     // chunks::chunks_restoring().unwrap();
 
-    // fuse::fuse_main();
+    fuse_main();
 
     // encrypt::crypto_demo().unwrap();
 }
 
 #[tokio::main]
-// async fn
-
 async fn async_main(uid: i32, vm: vm::vminfo::VmSetUp) {
     // let socket = vm.socket_path.clone();
     // let handle = task::spawn_blocking(|| {

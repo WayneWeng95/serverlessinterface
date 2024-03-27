@@ -1,15 +1,10 @@
 use fuser::consts::FOPEN_DIRECT_IO;
-#[cfg(feature = "abi-7-26")]
-use fuser::consts::FUSE_HANDLE_KILLPRIV;
-// #[cfg(feature = "abi-7-31")]
-// use fuser::consts::FUSE_WRITE_KILL_PRIV;
 use fuser::TimeOrNow::Now;
 use fuser::{
     Filesystem, KernelConfig, MountOption, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory,
     ReplyEmpty, ReplyEntry, ReplyOpen, ReplyStatfs, ReplyWrite, ReplyXattr, Request, TimeOrNow,
     FUSE_ROOT_ID,
 };
-#[cfg(feature = "abi-7-26")]
 use log::info;
 use log::{debug, warn};
 use log::{error, LevelFilter};
@@ -22,6 +17,7 @@ use std::io::{BufRead, BufReader, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::os::raw::c_int;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::FileExt;
+use std::os::unix::fs::OpenOptionsExt;
 #[cfg(target_os = "linux")]
 use std::os::unix::io::IntoRawFd;
 use std::path::{Path, PathBuf};
@@ -29,7 +25,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, fs, io};
 
-const BLOCK_SIZE: u64 = 512;
+const BLOCK_SIZE: u64 = 1024;
 const MAX_NAME_LENGTH: u32 = 255;
 const MAX_FILE_SIZE: u64 = 1024 * 1024 * 1024 * 1024;
 
@@ -252,23 +248,11 @@ impl VmFuse {
         direct_io: bool,
         #[allow(unused_variables)] suid_support: bool,
     ) -> VmFuse {
-        #[cfg(feature = "abi-7-26")]
-        {
-            VmFuse {
-                data_dir,
-                next_file_handle: AtomicU64::new(1),
-                direct_io,
-                suid_support,
-            }
-        }
-        #[cfg(not(feature = "abi-7-26"))]
-        {
-            VmFuse {
-                data_dir,
-                next_file_handle: AtomicU64::new(1),
-                direct_io,
-                suid_support: false,
-            }
+        VmFuse {
+            data_dir,
+            next_file_handle: AtomicU64::new(1),
+            direct_io,
+            suid_support: false,
         }
     }
 
@@ -478,9 +462,6 @@ impl Filesystem for VmFuse {
         _req: &Request,
         #[allow(unused_variables)] config: &mut KernelConfig,
     ) -> Result<(), c_int> {
-        #[cfg(feature = "abi-7-26")]
-        config.add_capabilities(FUSE_HANDLE_KILLPRIV).unwrap();
-
         fs::create_dir_all(Path::new(&self.data_dir).join("inodes")).unwrap();
         fs::create_dir_all(Path::new(&self.data_dir).join("contents")).unwrap();
         if self.get_inode(FUSE_ROOT_ID).is_err() {
@@ -1415,7 +1396,7 @@ impl Filesystem for VmFuse {
         _lock_owner: Option<u64>,
         reply: ReplyWrite,
     ) {
-        debug!("write() called with {:?} size={:?}", inode, data.len());
+        debug!("write() called with {:?} size={:?}", inode, data.len()); //this is called several times
         assert!(offset >= 0);
         if !self.check_file_handle_write(fh) {
             reply.error(libc::EACCES);
@@ -1424,21 +1405,43 @@ impl Filesystem for VmFuse {
 
         let path = self.content_path(inode);
         if let Ok(mut file) = OpenOptions::new().write(true).open(path) {
-            file.seek(SeekFrom::Start(offset as u64)).unwrap();
-            file.write_all(data).unwrap();
+            // Adjust offset to the nearest 2 MB boundary
+            let adjusted_offset = (offset / (2 * 1024 * 1024)) * (2 * 1024 * 1024);
+            let chunk_offset = offset - adjusted_offset;
+
+            // Write the data to the file in chunks of 2 MB
+            let mut remaining_data = data;
+            let mut written_bytes: usize = 0;
+            while !remaining_data.is_empty() {
+                let chunk_size = remaining_data.len().min(2 * 1024 * 1024);
+                let (chunk, rest) = remaining_data.split_at(chunk_size);
+                remaining_data = rest;
+
+                let bytes = written_bytes as i64;
+
+                file.seek(SeekFrom::Start((adjusted_offset + bytes) as u64))
+                    .unwrap();
+                file.write_all(chunk).unwrap();
+                written_bytes += chunk.len();
+            }
+
+            // if let Ok(mut file) = OpenOptions::new().write(true).open(path) {
+            //     file.seek(SeekFrom::Start(offset as u64)).unwrap();
+            //     file.write_all(data).unwrap();
+
+            //     let mut attrs = self.get_inode(inode).unwrap();
+            //     attrs.last_metadata_changed = time_now();
+            //     attrs.last_modified = time_now();
+            //     if data.len() + offset as usize > attrs.size as usize {
+            //         attrs.size = (data.len() + offset as usize) as u64;
+            //     }
 
             let mut attrs = self.get_inode(inode).unwrap();
             attrs.last_metadata_changed = time_now();
             attrs.last_modified = time_now();
-            if data.len() + offset as usize > attrs.size as usize {
+            if (data.len() + offset as usize) > attrs.size as usize {
                 attrs.size = (data.len() + offset as usize) as u64;
             }
-            // #[cfg(feature = "abi-7-31")]
-            // if flags & FUSE_WRITE_KILL_PRIV as i32 != 0 {
-            //     clear_suid_sgid(&mut attrs);
-            // }
-            // XXX: In theory we should only need to do this when WRITE_KILL_PRIV is set for 7.31+
-            // However, xfstests fail in that case
             clear_suid_sgid(&mut attrs);
             self.write_inode(&attrs);
 
@@ -1555,21 +1558,6 @@ impl Filesystem for VmFuse {
             attrs.open_file_handles -= 1;
         }
         reply.ok();
-    }
-
-    fn statfs(&mut self, _req: &Request, _ino: u64, reply: ReplyStatfs) {
-        warn!("statfs() implementation is a stub");
-        // TODO: real implementation of this
-        reply.statfs(
-            10_000,
-            10_000,
-            10_000,
-            1,
-            10_000,
-            BLOCK_SIZE as u32,
-            MAX_NAME_LENGTH,
-            BLOCK_SIZE as u32,
-        );
     }
 
     fn setxattr(
@@ -1836,35 +1824,74 @@ impl Filesystem for VmFuse {
             return;
         }
 
-        let src_path = self.content_path(src_inode);
-        if let Ok(file) = File::open(src_path) {
-            let file_size = file.metadata().unwrap().len();
-            // Could underflow if file length is less than local_start
-            let read_size = min(size, file_size.saturating_sub(src_offset as u64));
+        let chunk_size = 2 * 1024 * 1024; // 2 MiB
+        let mut remaining_size = size;
+        let mut current_src_offset = src_offset;
+        let mut current_dest_offset = dest_offset;
 
+        while remaining_size > 0 {
+            let read_size = min(chunk_size, remaining_size);
             let mut data = vec![0; read_size as usize];
-            file.read_exact_at(&mut data, src_offset as u64).unwrap();
+
+            let src_path = self.content_path(src_inode);
+            if let Ok(mut file) = File::open(src_path) {
+                file.seek(SeekFrom::Start(current_src_offset as u64))
+                    .unwrap();
+                file.read_exact(&mut data).unwrap();
+            } else {
+                reply.error(libc::ENOENT);
+                return;
+            }
 
             let dest_path = self.content_path(dest_inode);
-            if let Ok(mut file) = OpenOptions::new().write(true).open(dest_path) {
-                file.seek(SeekFrom::Start(dest_offset as u64)).unwrap();
+            if let Ok(mut file) = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .mode(0o644)
+                .open(dest_path)
+            {
+                file.seek(SeekFrom::Start(current_dest_offset as u64))
+                    .unwrap();
                 file.write_all(&data).unwrap();
-
-                let mut attrs = self.get_inode(dest_inode).unwrap();
-                attrs.last_metadata_changed = time_now();
-                attrs.last_modified = time_now();
-                if data.len() + dest_offset as usize > attrs.size as usize {
-                    attrs.size = (data.len() + dest_offset as usize) as u64;
-                }
-                self.write_inode(&attrs);
-
-                reply.written(data.len() as u32);
             } else {
                 reply.error(libc::EBADF);
+                return;
             }
-        } else {
-            reply.error(libc::ENOENT);
+
+            current_src_offset += read_size as i64;
+            current_dest_offset += read_size as i64;
+            remaining_size -= read_size;
         }
+
+        // let src_path = self.content_path(src_inode);
+        // if let Ok(file) = File::open(src_path) {
+        //     let file_size = file.metadata().unwrap().len();
+        //     // Could underflow if file length is less than local_start
+        //     let read_size = min(size, file_size.saturating_sub(src_offset as u64));
+
+        //     let mut data = vec![0; read_size as usize];
+        //     file.read_exact_at(&mut data, src_offset as u64).unwrap();
+
+        //     let dest_path = self.content_path(dest_inode);
+        //     if let Ok(mut file) = OpenOptions::new().write(true).open(dest_path) {
+        //         file.seek(SeekFrom::Start(dest_offset as u64)).unwrap();
+        //         file.write_all(&data).unwrap();
+
+        //         let mut attrs = self.get_inode(dest_inode).unwrap();
+        //         attrs.last_metadata_changed = time_now();
+        //         attrs.last_modified = time_now();
+        //         if data.len() + dest_offset as usize > attrs.size as usize {
+        //             attrs.size = (data.len() + dest_offset as usize) as u64;
+        //         }
+        //         self.write_inode(&attrs);
+
+        //         reply.written(data.len() as u32);
+        //     } else {
+        //         reply.error(libc::EBADF);
+        //     }
+        // } else {
+        //     reply.error(libc::ENOENT);
+        // }
     }
 }
 
@@ -1969,12 +1996,16 @@ pub fn fuse_main() {
     //             .help("Allow root user to access filesystem"),
     //     )
     //     .get_matches();
-    env_logger::init();
+    env_logger::builder()
+        .format_timestamp_nanos()
+        .filter_level(LevelFilter::Debug)
+        .init();
     let mountpoint = "/home/weikang/Documents/serverlessinterface/testfolder";
     let data_dir = "data-dir".to_string();
     // let filesystem = VmFuse; //This is the only thing need to test
     let mut options = vec![MountOption::FSName("fuser".to_string())];
     options.push(MountOption::AutoUnmount);
+    // options.push(MountOption::CUSTOM(()));
     let result = fuser::mount2(
         VmFuse::new(
             data_dir,
